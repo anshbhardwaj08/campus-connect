@@ -1,0 +1,20 @@
+node_modules/
+.env
+logs/
+*.log
+.DS_Store
+
+# Machine-local editor/tool settings
+.claude/settings.local.json
+
+server/node_modules/
+server/logs/
+server/.env
+
+client/node_modules/
+client/dist/
+client/.env
+
+admin/node_modules/
+admin/dist/
+admin/.env
