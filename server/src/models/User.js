@@ -15,9 +15,19 @@ const userSchema = new mongoose.Schema(
     isPhoneVerified: { type: Boolean, default: false },
     isEmailVerified: { type: Boolean, default: false },
     isBlocked: { type: Boolean, default: false },
+    // Shown to the suspended person on the way out. Optional: a moderator
+    // dealing with an obvious spammer should not be forced to write an
+    // essay, but with nothing recorded nobody can ever be told why.
+    banReason: { type: String, trim: true },
     dealsCompleted: { type: Number, default: 0 },
     refreshToken: { type: String, select: false },
     passwordHash: { type: String, required: true, select: false },
+    // Password reset. The stored value is a SHA-256 of the token that went
+    // out in the email, never the token itself — a leaked database then
+    // does not hand anyone a working reset link. Both are cleared the
+    // moment a reset succeeds, so a link works exactly once.
+    passwordResetToken: { type: String, select: false },
+    passwordResetExpires: { type: Date, select: false },
   },
   { timestamps: true }
 );
@@ -25,5 +35,9 @@ const userSchema = new mongoose.Schema(
 // Indexes: collegeEmail unique (declared above), role for admin filtering, trustScore for sorting
 userSchema.index({ role: 1 });
 userSchema.index({ trustScore: -1 });
+// Partial, so it indexes only the handful of suspended accounts rather than
+// every row under a low-cardinality boolean. Every student-facing list
+// looks this set up to exclude their content — see utils/blockedUsers.js.
+userSchema.index({ isBlocked: 1 }, { partialFilterExpression: { isBlocked: true } });
 
 module.exports = mongoose.model('User', userSchema);

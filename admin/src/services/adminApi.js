@@ -1,18 +1,13 @@
+// Same shape as client/src/services/api.js: the access token lives in an
+// httpOnly cookie, not in Redux, so there is no Authorization header to set —
+// `withCredentials` is what carries the session on every request.
 import axios from 'axios';
 import { store } from '../store';
-import { setAdminCredentials, adminLogout } from '../store/slices/adminAuthSlice';
+import { adminLogout } from '../store/slices/adminAuthSlice';
 
 const adminApi = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
-});
-
-adminApi.interceptors.request.use((config) => {
-  const token = store.getState().adminAuth.token;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
 });
 
 let isRefreshing = false;
@@ -26,6 +21,10 @@ const processQueue = (error) => {
   refreshQueue = [];
 };
 
+// A 401 from /auth/login itself means "wrong credentials", not "session
+// expired" — attempting a refresh here would mask the real error.
+const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/refresh-token'];
+
 adminApi.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -35,8 +34,10 @@ adminApi.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (originalRequest.url?.includes('/auth/refresh-token')) {
-      store.dispatch(adminLogout());
+    if (PUBLIC_AUTH_PATHS.some((path) => originalRequest.url?.includes(path))) {
+      if (originalRequest.url?.includes('/auth/refresh-token')) {
+        store.dispatch(adminLogout());
+      }
       return Promise.reject(error);
     }
 

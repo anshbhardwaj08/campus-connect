@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -7,7 +8,7 @@ const ApiResponse = require('../utils/ApiResponse');
 const generateOTP = require('../utils/generateOTP');
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateToken');
 const redisClient = require('../config/redis');
-const { sendVerifyEmail, sendOTPEmail } = require('../services/email.service');
+const { sendVerifyEmail, sendOTPEmail, sendPasswordResetEmail } = require('../services/email.service');
 const { sendPhoneOTP } = require('../services/sms.service');
 const { winstonLogger } = require('../middleware/logger');
 
@@ -115,6 +116,79 @@ const verifyOTP = catchAsync(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, null, 'Phone verified successfully'));
 });
 
+// POST /auth/forgot-password
+//
+// Always answers the same way, whether or not the account exists. Saying
+// "no account with that email" here would turn this endpoint into a way to
+// find out who is registered, one address at a time.
+//
+// The emailed token is random and single-use; only its SHA-256 is stored,
+// so a leaked database does not yield working reset links. `passwordReset`
+// fields are `select: false` on the model — see User.js.
+const forgotPassword = catchAsync(async (req, res) => {
+  const collegeEmail = req.body.collegeEmail.trim().toLowerCase();
+  const SAME_ANSWER = 'If that account exists, a reset link is on its way.';
+
+  const user = await User.findOne({ collegeEmail });
+
+  if (user) {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashed = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    // updateOne rather than save(): the document was fetched without the
+    // `select: false` passwordHash, and writing through the model avoids
+    // any question of required-field validation on a path that was never
+    // loaded.
+    await User.updateOne(
+      { _id: user._id },
+      { passwordResetToken: hashed, passwordResetExpires: new Date(Date.now() + 60 * 60 * 1000) }
+    );
+
+    const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${rawToken}`;
+    try {
+      await sendPasswordResetEmail(collegeEmail, resetLink);
+    } catch (err) {
+      // The student still gets the same answer — telling them the mail
+      // failed would leak that the account exists.
+      winstonLogger.error(`Failed to send reset email to ${collegeEmail}: ${err.message}`);
+    }
+  }
+
+  return res.status(200).json(new ApiResponse(200, null, SAME_ANSWER));
+});
+
+// POST /auth/reset-password
+const resetPassword = catchAsync(async (req, res) => {
+  const { token, password } = req.body;
+  const hashed = crypto.createHash('sha256').update(token).digest('hex');
+
+  const user = await User.findOne({
+    passwordResetToken: hashed,
+    passwordResetExpires: { $gt: new Date() },
+  });
+  if (!user) throw new ApiError(400, 'That reset link is invalid or has already been used');
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  // Clearing the token makes the link single-use. Clearing refreshToken
+  // ends every other session: if someone else had got in with the old
+  // password, resetting it is exactly the moment they should be thrown out.
+  await User.updateOne(
+    { _id: user._id },
+    {
+      passwordHash,
+      refreshToken: null,
+      $unset: { passwordResetToken: 1, passwordResetExpires: 1 },
+    }
+  );
+
+  winstonLogger.info(`Password reset completed for ${user.collegeEmail}`);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, null, 'Password changed. Sign in with the new one.'));
+});
+
 // POST /auth/login
 const login = catchAsync(async (req, res) => {
   const { password } = req.body;
@@ -125,7 +199,13 @@ const login = catchAsync(async (req, res) => {
 
   const user = await User.findOne({ collegeEmail }).select('+passwordHash');
   if (!user) throw new ApiError(401, 'Invalid credentials');
-  if (user.isBlocked) throw new ApiError(403, 'Account is blocked');
+  // Tagged so the client can send them to the suspended screen rather than
+  // printing a bare 403 under the password field.
+  if (user.isBlocked) {
+    throw new ApiError(403, 'This account has been suspended').withCode('ACCOUNT_BLOCKED', {
+      reason: user.banReason || null,
+    });
+  }
 
   const isMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isMatch) throw new ApiError(401, 'Invalid credentials');
@@ -178,4 +258,14 @@ const logout = catchAsync(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, null, 'Logged out successfully'));
 });
 
-module.exports = { register, verifyEmail, sendOTP, verifyOTP, login, refreshToken, logout };
+module.exports = {
+  register,
+  verifyEmail,
+  sendOTP,
+  verifyOTP,
+  forgotPassword,
+  resetPassword,
+  login,
+  refreshToken,
+  logout,
+};

@@ -3,6 +3,7 @@ const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const { paginate, buildPagination } = require('../utils/paginate');
+const { excludeBlocked } = require('../utils/blockedUsers');
 
 // POST /lookingfor
 const create = catchAsync(async (req, res) => {
@@ -14,7 +15,8 @@ const create = catchAsync(async (req, res) => {
 const getAll = catchAsync(async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
   const { category } = req.query;
-  const filter = { status: 'open', ...(category && { category }) };
+  // Suspended posters come off the board with everything else of theirs.
+  const filter = { status: 'open', ...(category && { category }), ...(await excludeBlocked('userId')) };
 
   const [posts, total] = await Promise.all([
     LookingFor.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('userId', 'name avatar'),

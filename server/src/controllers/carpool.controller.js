@@ -3,6 +3,7 @@ const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const { paginate, buildPagination } = require('../utils/paginate');
+const { excludeBlocked } = require('../utils/blockedUsers');
 
 // POST /carpool
 const post = catchAsync(async (req, res) => {
@@ -18,6 +19,8 @@ const getAll = catchAsync(async (req, res) => {
     status: 'open',
     ...(from && { from: new RegExp(from, 'i') }),
     ...(to && { to: new RegExp(to, 'i') }),
+    // Suspended posters come off the board with everything else of theirs.
+    ...(await excludeBlocked('userId')),
   };
 
   const [rides, total] = await Promise.all([

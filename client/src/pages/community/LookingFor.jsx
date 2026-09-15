@@ -20,12 +20,13 @@ import Textarea from '../../components/ui/Textarea';
 import Select from '../../components/ui/Select';
 import formatPrice from '../../utils/formatPrice';
 import { timeAgo } from '../../utils/timeAgo';
-import { categories } from '../../constants/categories';
+import { useCategories } from '../../hooks/useCategories';
 
 const BLANK = { title: '', description: '', category: '', maxBudget: '' };
 
 export default function LookingFor() {
   const { user, isAuthenticated } = useAuth();
+  const categories = useCategories();
   const queryClient = useQueryClient();
   const [category, setCategory] = useState('');
   const [open, setOpen] = useState(false);
@@ -81,7 +82,7 @@ export default function LookingFor() {
               Everything
             </FilterChip>
             {categories.slice(0, 6).map((c) => (
-              <FilterChip key={c.id} active={category === c.slug} onClick={() => setCategory(c.slug)}>
+              <FilterChip key={c.slug} active={category === c.slug} onClick={() => setCategory(c.slug)}>
                 {c.name}
               </FilterChip>
             ))}

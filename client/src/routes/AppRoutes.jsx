@@ -7,6 +7,9 @@ import Login from '../pages/auth/Login';
 import Register from '../pages/auth/Register';
 import VerifyEmail from '../pages/auth/VerifyEmail';
 import VerifyPhone from '../pages/auth/VerifyPhone';
+import ForgotPassword from '../pages/auth/ForgotPassword';
+import ResetPassword from '../pages/auth/ResetPassword';
+import Suspended from '../pages/auth/Suspended';
 
 import Home from '../pages/home/Home';
 import Browse from '../pages/listings/Browse';
@@ -36,6 +39,9 @@ export default function AppRoutes() {
       <Route path="/register" element={<Register />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/verify-phone" element={<VerifyPhone />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/suspended" element={<Suspended />} />
 
       <Route path="/browse" element={<Browse />} />
       <Route path="/listings/:id" element={<ListingDetailPage />} />

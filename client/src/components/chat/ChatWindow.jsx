@@ -18,6 +18,7 @@ import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import MessageBubble from './MessageBubble';
+import ReportModal from '../report/ReportModal';
 import formatPrice from '../../utils/formatPrice';
 
 const SUBJECT_LABEL = {
@@ -38,6 +39,7 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
   const [offerOpen, setOfferOpen] = useState(false);
   const [offerAmount, setOfferAmount] = useState('');
   const [accepting, setAccepting] = useState(false);
+  const [reporting, setReporting] = useState(null); // the message being reported
   const bottomRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -191,15 +193,20 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
               Nothing said yet. Ask if it is still available, then agree a time and a gate.
             </p>
           ) : (
-            messages.map((m) => (
-              <MessageBubble
-                key={m._id}
-                message={m}
-                isMine={String(m.senderId) === String(currentUserId)}
-                canAcceptOffer={isSeller && !accepting}
-                onAcceptOffer={acceptOffer}
-              />
-            ))
+            messages.map((m) => {
+              const isMine = String(m.senderId) === String(currentUserId);
+              return (
+                <MessageBubble
+                  key={m._id}
+                  message={m}
+                  isMine={isMine}
+                  canAcceptOffer={isSeller && !accepting}
+                  onAcceptOffer={acceptOffer}
+                  // Nothing to report about your own message.
+                  onReport={isMine ? undefined : setReporting}
+                />
+              );
+            })
           )}
           <div ref={bottomRef} />
         </div>
@@ -263,6 +270,14 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
           </p>
         </div>
       </div>
+
+      <ReportModal
+        isOpen={Boolean(reporting)}
+        onClose={() => setReporting(null)}
+        targetType="message"
+        targetId={reporting?._id}
+        targetLabel={`this message from ${other?.name || 'them'}`}
+      />
     </div>
   );
 }

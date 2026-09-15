@@ -21,4 +21,21 @@ const otpSchema = Joi.object({
   otp: Joi.string().length(6).required(),
 });
 
-module.exports = { registerSchema, loginSchema, otpSchema };
+const forgotPasswordSchema = Joi.object({
+  collegeEmail: Joi.string().email().required(),
+});
+
+const resetPasswordSchema = Joi.object({
+  token: Joi.string().hex().length(64).required(),
+  // Same floor as registration — a reset must not be a way to set a weaker
+  // password than signup would allow.
+  password: Joi.string().min(8).max(128).required(),
+});
+
+module.exports = {
+  registerSchema,
+  loginSchema,
+  otpSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+};

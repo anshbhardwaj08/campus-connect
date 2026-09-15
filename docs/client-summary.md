@@ -5,7 +5,9 @@ verified against the live API.
 
 ## Screens
 
-- **Auth** — Login, Register, VerifyEmail, VerifyPhone (OTP mocked, no Twilio)
+- **Auth** — Login, Register, VerifyEmail, VerifyPhone (OTP mocked, no Twilio),
+  ForgotPassword / ResetPassword (single-use emailed link, one hour; resetting
+  signs you out everywhere else)
 - **Home** — hero panel, category rail with real counts, listing feed
 - **Browse** — search, category/condition/price filters, 3 sort orders,
   pagination. All filter state in the URL
@@ -18,9 +20,15 @@ verified against the live API.
 - **Saved** — saved listings
 - **Community** — Events (poster, organiser can call off), Lost & Found
   (photos, resolve), Carpool (post/remove), Wanted (post/fulfil)
+- **Report** — `report/ReportButton` on a listing (seller panel) and on a
+  public profile. Fixed reason list + optional detail; hidden when signed
+  out or on your own listing. Idempotent: reporting twice while the first
+  is open does not duplicate. Goes to the admin queue, anonymously.
 
 ## Design system
 
+- Categories come from the database via `hooks/useCategories`
+  (`GET /categories`), not a hardcoded list — what an admin adds, students see
 - Spec: `docs/design-system.md`. Read it before writing any UI
 - Tokens in `index.css` + `tailwind.config.js`. Crimson is the only accent
 - `Panel` is the only container. `Field`/`fieldStyles` back every form control

@@ -36,6 +36,27 @@ const authLimiter = rateLimit({
   },
 });
 
+// Password reset needs its own bucket, and specifically one that counts
+// SUCCESSFUL requests.
+//
+// `authLimiter` skips successes on purpose — for login, the failed guesses
+// are what matter and a student signing in normally should never be
+// throttled. For "email me a reset link" the successful request IS the
+// abusive one: without this, someone could point it at a classmate's
+// address and fill their inbox indefinitely. Five an hour is plenty for
+// somebody genuinely locked out.
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many reset requests. Try again in an hour.',
+  },
+});
+
 module.exports = apiLimiter;
 module.exports.apiLimiter = apiLimiter;
 module.exports.authLimiter = authLimiter;
+module.exports.passwordResetLimiter = passwordResetLimiter;

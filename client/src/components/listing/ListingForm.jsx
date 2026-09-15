@@ -22,7 +22,7 @@ import Button from '../ui/Button';
 import Panel from '../ui/Panel';
 import CaptionBox from '../ui/CaptionBox';
 import ImagePicker from './ImagePicker';
-import { categories } from '../../constants/categories';
+import { useCategories } from '../../hooks/useCategories';
 import { conditions } from '../../constants/conditions';
 
 const CONDITION_LABEL = {
@@ -50,6 +50,7 @@ const listingSchema = z.object({
 export default function ListingForm({ listing = null }) {
   const navigate = useNavigate();
   const isEdit = Boolean(listing);
+  const categories = useCategories();
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
 

@@ -7,7 +7,7 @@ import { SlidersHorizontal, X } from 'lucide-react';
 
 import Select from '../ui/Select';
 import Input from '../ui/Input';
-import { categories } from '../../constants/categories';
+import { useCategories } from '../../hooks/useCategories';
 import { conditions } from '../../constants/conditions';
 
 const CONDITION_LABEL = {
@@ -24,6 +24,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function FilterPanel({ filters, onChange, onReset, activeCount = 0, className = '' }) {
+  const categories = useCategories();
   const set = (key) => (e) => onChange(key, e.target.value);
 
   return (
@@ -102,6 +103,7 @@ export default function FilterPanel({ filters, onChange, onReset, activeCount = 
 // Shown above the grid so it is obvious what is currently filtering the
 // results — a filter you cannot see is a filter you forget you set.
 export function ActiveFilterChips({ filters, onClear }) {
+  const categories = useCategories();
   const chips = [];
   if (filters.q) chips.push(['q', `“${filters.q}”`]);
   if (filters.category) {

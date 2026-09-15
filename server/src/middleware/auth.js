@@ -18,7 +18,12 @@ const verifyAccessToken = catchAsync(async (req, res, next) => {
 
   const user = await User.findById(decoded.userId).select('-passwordHash -refreshToken');
   if (!user) throw new ApiError(401, 'User not found');
-  if (user.isBlocked) throw new ApiError(403, 'Account is blocked');
+  // Someone blocked mid-session hits this on every request. Tagging it lets
+  // the client end the session and explain, instead of every page quietly
+  // failing.
+  if (user.isBlocked) {
+    throw new ApiError(403, 'This account has been suspended').withCode('ACCOUNT_BLOCKED');
+  }
 
   req.user = user;
   next();

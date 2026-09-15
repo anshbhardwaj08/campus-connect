@@ -18,6 +18,10 @@ const errorHandler = (err, req, res, next) => {
     success: false,
     message: error.message,
     errors: error.errors,
+    // Present only where a client has to tell two same-status errors apart
+    // — see ApiError.withCode.
+    ...(error.code && { code: error.code }),
+    ...(error.details && { details: error.details }),
     ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
   });
 };

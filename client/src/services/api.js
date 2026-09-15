@@ -43,6 +43,23 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Blocked mid-session: every authenticated request starts 403ing, so
+    // without this the app just breaks page by page with no explanation.
+    // Keyed on the code, not the status — a 403 from a moderator-only
+    // route is an ordinary "not for you" and must not sign anyone out.
+    //
+    // Sign-in is the login screen's own business, though: it hands the
+    // suspension reason to /suspended through router state, and a hard
+    // redirect from here would win the race and throw that away.
+    const isLoginAttempt = originalRequest.url?.includes('/auth/login');
+    if (error.response?.data?.code === 'ACCOUNT_BLOCKED' && !isLoginAttempt) {
+      store.dispatch(logout());
+      if (window.location.pathname !== '/suspended') {
+        window.location.assign('/suspended');
+      }
+      return Promise.reject(error);
+    }
+
     if (error.response?.status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }

@@ -4,6 +4,7 @@ const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const { paginate, buildPagination } = require('../utils/paginate');
 const calculateScamScore = require('../utils/scamScore');
+const { excludeBlocked } = require('../utils/blockedUsers');
 
 // POST /listings
 const create = catchAsync(async (req, res) => {
@@ -36,7 +37,9 @@ const getAll = catchAsync(async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
   const { q, category, condition, minPrice, maxPrice, sort } = req.query;
 
-  const filter = { status: 'active' };
+  // A suspended seller's listings come off the page entirely — see
+  // utils/blockedUsers.js.
+  const filter = { status: 'active', ...(await excludeBlocked('sellerId')) };
   if (category) filter.category = category;
   if (condition) filter.condition = condition;
   if (minPrice || maxPrice) {
@@ -71,10 +74,13 @@ const getAll = catchAsync(async (req, res) => {
 
 // GET /listings/:id
 const getById = catchAsync(async (req, res) => {
-  const listing = await Listing.findById(req.params.id).populate(
-    'sellerId',
-    'name avatar trustScore dealsCompleted isEmailVerified'
-  );
+  // Same exclusion as the browse list: hiding a suspended seller from the
+  // grid but serving their listing to anyone with the direct link would
+  // just move the problem.
+  const listing = await Listing.findOne({
+    _id: req.params.id,
+    ...(await excludeBlocked('sellerId')),
+  }).populate('sellerId', 'name avatar trustScore dealsCompleted isEmailVerified');
   if (!listing) throw new ApiError(404, 'Listing not found');
 
   return res.status(200).json(new ApiResponse(200, { listing }, 'Listing fetched'));
@@ -164,6 +170,7 @@ const getSimilar = catchAsync(async (req, res) => {
     _id: { $ne: listing._id },
     category: listing.category,
     status: 'active',
+    ...(await excludeBlocked('sellerId')),
   })
     .limit(8)
     .sort({ createdAt: -1 });

@@ -64,7 +64,10 @@ const getMyDeals = catchAsync(async (req, res) => {
 // at a gate. Deliberately a narrow projection — never the whole document,
 // which carries phone, email, refreshToken and passwordHash.
 const getPublicProfile = catchAsync(async (req, res) => {
-  const user = await User.findById(req.params.id).select(
+  // A suspended account has no public face while the suspension stands —
+  // 404 rather than 403, since whether they exist is not the browser's
+  // business either.
+  const user = await User.findOne({ _id: req.params.id, isBlocked: { $ne: true } }).select(
     'name avatar dept batch trustScore dealsCompleted isEmailVerified createdAt'
   );
   if (!user) throw new ApiError(404, 'User not found');
@@ -77,6 +80,11 @@ const getPublicProfile = catchAsync(async (req, res) => {
 // listings are not the public's business.
 const getUserListings = catchAsync(async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
+
+  // Matches getPublicProfile: nothing of a suspended seller's is public.
+  const seller = await User.findOne({ _id: req.params.id, isBlocked: { $ne: true } }, '_id');
+  if (!seller) throw new ApiError(404, 'User not found');
+
   const filter = { sellerId: req.params.id, status: { $in: ['active', 'sold'] } };
 
   const [listings, total] = await Promise.all([

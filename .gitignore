@@ -19,3 +19,4 @@ admin/node_modules/
 admin/dist/
 admin/.env
 client/.ui-check/
+admin/.ui-check/

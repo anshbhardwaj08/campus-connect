@@ -13,6 +13,7 @@ import Badge from '../ui/Badge';
 import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
 import CaptionBox from '../ui/CaptionBox';
+import ReportButton from '../report/ReportButton';
 import formatPrice from '../../utils/formatPrice';
 import { timeAgo } from '../../utils/timeAgo';
 
@@ -195,14 +196,25 @@ export default function ListingDetail({ listing, isOwner = false, onSave, saved 
               Meet at the gate. Look it over. Then pay. Never send money in advance.
             </p>
 
-            {seller?._id && (
-              <Link
-                to={`/users/${seller._id}`}
-                className="mt-3 inline-flex min-h-[46px] items-center text-[13px] font-extrabold uppercase tracking-[.07em] text-ink underline decoration-2 underline-offset-4 transition-colors hover:text-crimson"
-              >
-                See their other panels
-              </Link>
-            )}
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              {seller?._id && (
+                <Link
+                  to={`/users/${seller._id}`}
+                  className="inline-flex min-h-[46px] items-center text-[13px] font-extrabold uppercase tracking-[.07em] text-ink underline decoration-2 underline-offset-4 transition-colors hover:text-crimson"
+                >
+                  See their other panels
+                </Link>
+              )}
+
+              {/* The safety line above tells you what a scam looks like;
+                  this is what you do about one. */}
+              <ReportButton
+                targetType="listing"
+                targetId={listing._id}
+                targetLabel="this listing"
+                ownerId={seller?._id}
+              />
+            </div>
           </Panel>
         </div>
       </div>

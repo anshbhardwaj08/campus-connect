@@ -11,6 +11,7 @@ import ListingGrid from '../../components/listing/ListingGrid';
 import Panel from '../../components/ui/Panel';
 import CaptionBox from '../../components/ui/CaptionBox';
 import Skeleton from '../../components/ui/Skeleton';
+import ReportButton from '../../components/report/ReportButton';
 
 export default function PublicProfile() {
   const { id } = useParams();
@@ -74,6 +75,20 @@ export default function PublicProfile() {
             <ReviewList reviews={reviews || []} loading={reviewsLoading} />
           </div>
         </Panel>
+      </div>
+
+      {/* Reporting a person sits at the very bottom, away from the reviews
+          it must not be mistaken for. A bad review and a report are
+          different acts. */}
+      <div className="mt-[9px] flex justify-end">
+        {/* No ownerId guard needed: this page sends you to /profile if the
+            id is your own, so whoever is here is looking at someone else. */}
+        <ReportButton
+          targetType="user"
+          targetId={id}
+          targetLabel={user.name}
+          label="Report this person"
+        />
       </div>
     </PageWrapper>
   );

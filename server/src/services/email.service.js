@@ -41,6 +41,17 @@ const sendOTPEmail = async (to, otp) => {
   });
 };
 
+const sendPasswordResetEmail = async (to, resetLink) => {
+  return sendMail({
+    to,
+    subject: 'Reset your Campus Connect password',
+    html: `<p>Someone asked to reset the password for this Campus Connect account.</p>
+           <p><a href="${resetLink}">${resetLink}</a></p>
+           <p>The link works once and expires in an hour. If this was not you,
+              ignore this email — nothing has changed.</p>`,
+  });
+};
+
 const sendDealAlertEmail = async (to, dealDetails) => {
   return sendMail({
     to,
@@ -49,4 +60,10 @@ const sendDealAlertEmail = async (to, dealDetails) => {
   });
 };
 
-module.exports = { sendMail, sendVerifyEmail, sendOTPEmail, sendDealAlertEmail };
+module.exports = {
+  sendMail,
+  sendVerifyEmail,
+  sendOTPEmail,
+  sendPasswordResetEmail,
+  sendDealAlertEmail,
+};

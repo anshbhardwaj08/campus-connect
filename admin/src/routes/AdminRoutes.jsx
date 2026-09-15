@@ -2,6 +2,7 @@
 import { Routes, Route } from 'react-router-dom';
 
 import AdminProtectedRoute from './AdminProtectedRoute';
+import AdminWrapper from '../components/layout/AdminWrapper';
 
 import AdminLogin from '../pages/auth/AdminLogin';
 import Dashboard from '../pages/dashboard/Dashboard';
@@ -22,17 +23,19 @@ export default function AdminRoutes() {
       <Route path="/login" element={<AdminLogin />} />
 
       <Route element={<AdminProtectedRoute />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/users" element={<UserList />} />
-        <Route path="/users/:id" element={<UserDetail />} />
-        <Route path="/listings" element={<AllListings />} />
-        <Route path="/listings/pending" element={<PendingListings />} />
-        <Route path="/reports" element={<ReportQueue />} />
-        <Route path="/deals" element={<AllDeals />} />
-        <Route path="/categories" element={<CategoryManager />} />
-        <Route path="/community/events" element={<EventsAdmin />} />
-        <Route path="/notifications/broadcast" element={<Broadcaster />} />
-        <Route path="/logs" element={<AuditLogs />} />
+        <Route element={<AdminWrapper />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/users" element={<UserList />} />
+          <Route path="/users/:id" element={<UserDetail />} />
+          <Route path="/listings" element={<AllListings />} />
+          <Route path="/listings/pending" element={<PendingListings />} />
+          <Route path="/reports" element={<ReportQueue />} />
+          <Route path="/deals" element={<AllDeals />} />
+          <Route path="/categories" element={<CategoryManager />} />
+          <Route path="/community/events" element={<EventsAdmin />} />
+          <Route path="/notifications/broadcast" element={<Broadcaster />} />
+          <Route path="/logs" element={<AuditLogs />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<div>Page not found</div>} />

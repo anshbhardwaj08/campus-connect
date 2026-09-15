@@ -61,6 +61,14 @@ export default function Login() {
       toast.success(`Back on the page, ${user.name.split(' ')[0]}.`);
       navigate('/');
     } catch (err) {
+      // A suspension is not a typo in the password — it gets its own screen
+      // rather than a line of red under the field.
+      if (err?.response?.data?.code === 'ACCOUNT_BLOCKED') {
+        // The reason rides along in router state — there is no endpoint a
+        // blocked account could call to ask for it afterwards.
+        navigate('/suspended', { state: { reason: err.response.data.details?.reason || null } });
+        return;
+      }
       toast.error(apiErrorMessage(err, 'That did not work. Check the address and the password.'));
     } finally {
       setLoading(false);
@@ -121,12 +129,18 @@ export default function Login() {
 
       {/* Secondary actions are underlined text buttons, never outlined
           buttons — there is only ever one crimson element on screen. */}
-      <div className="js-field mt-5">
+      <div className="js-field mt-5 flex flex-wrap items-center gap-x-6">
         <Link
           to="/register"
           className="inline-flex min-h-[46px] items-center text-[13px] font-extrabold uppercase tracking-[.07em] text-ink underline decoration-2 underline-offset-4 transition-colors hover:text-crimson"
         >
           No account yet? Start your file
+        </Link>
+        <Link
+          to="/forgot-password"
+          className="inline-flex min-h-[46px] items-center text-[13px] font-extrabold uppercase tracking-[.07em] text-steel underline decoration-2 underline-offset-4 transition-colors hover:text-crimson"
+        >
+          Forgot password
         </Link>
       </div>
     </AuthLayout>

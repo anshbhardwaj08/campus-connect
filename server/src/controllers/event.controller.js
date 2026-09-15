@@ -3,6 +3,7 @@ const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const { paginate, buildPagination } = require('../utils/paginate');
+const { excludeBlocked } = require('../utils/blockedUsers');
 
 // POST /events
 const create = catchAsync(async (req, res) => {
@@ -15,13 +16,16 @@ const create = catchAsync(async (req, res) => {
 const getAll = catchAsync(async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
 
+  // A suspended organiser's events come down with the rest of their content.
+  const filter = { date: { $gte: new Date() }, ...(await excludeBlocked('organizerId')) };
+
   const [events, total] = await Promise.all([
-    Event.find({ date: { $gte: new Date() } })
+    Event.find(filter)
       .sort({ date: 1 })
       .skip(skip)
       .limit(limit)
       .populate('organizerId', 'name avatar'),
-    Event.countDocuments({ date: { $gte: new Date() } }),
+    Event.countDocuments(filter),
   ]);
 
   return res

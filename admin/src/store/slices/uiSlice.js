@@ -1,21 +1,21 @@
-// UI state: dark mode toggle and sidebar collapsed/open state
+// UI state: sidebar collapsed/open. No dark mode — the paper ground is the
+// theme, same rule as /client (see docs/design-system.md).
 import { createSlice } from '@reduxjs/toolkit';
 
 const uiSlice = createSlice({
   name: 'ui',
   initialState: {
-    darkMode: false,
     sidebarOpen: true,
   },
   reducers: {
-    toggleDarkMode: (state) => {
-      state.darkMode = !state.darkMode;
-    },
     setSidebarOpen: (state, action) => {
       state.sidebarOpen = action.payload;
+    },
+    toggleSidebar: (state) => {
+      state.sidebarOpen = !state.sidebarOpen;
     },
   },
 });
 
-export const { toggleDarkMode, setSidebarOpen } = uiSlice.actions;
+export const { setSidebarOpen, toggleSidebar } = uiSlice.actions;
 export default uiSlice.reducer;

@@ -4,6 +4,7 @@ const Listing = require('../models/Listing');
 const LookingFor = require('../models/LookingFor');
 const Carpool = require('../models/Carpool');
 const LostFound = require('../models/LostFound');
+const User = require('../models/User');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
@@ -76,6 +77,13 @@ const startConversation = catchAsync(async (req, res) => {
   const ownerId = String(doc[spec.owner]);
   const meId = String(req.user._id);
   if (ownerId === meId) throw new ApiError(400, 'That is your own post');
+
+  // Opening a thread with a suspended account would only ever be a message
+  // into a void — they cannot reply while the suspension stands. Their
+  // content should already be hidden, so this is the backstop for a link
+  // someone still has open.
+  const owner = await User.findById(ownerId, 'isBlocked');
+  if (!owner || owner.isBlocked) throw new ApiError(404, 'That post is gone');
 
   const title = kind === 'carpool' ? describeCarpool(doc) : doc[spec.title];
 

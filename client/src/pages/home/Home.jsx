@@ -14,7 +14,7 @@ import Panel from '../../components/ui/Panel';
 import CaptionBox from '../../components/ui/CaptionBox';
 import Button from '../../components/ui/Button';
 import ListingGrid from '../../components/listing/ListingGrid';
-import { categories } from '../../constants/categories';
+import { useCategories } from '../../hooks/useCategories';
 
 // Stable empty-array reference so `listings` doesn't get a new [] identity
 // every render while the query is still loading — that was invalidating
@@ -129,6 +129,8 @@ function Sidebar({
   savedCount,
   myListingCount,
 }) {
+  const categories = useCategories();
+
   return (
     <aside className="mb-[9px] shrink-0 lg:sticky lg:top-[76px] lg:mb-0 lg:w-[220px]">
       <div className="border-2 border-ink bg-paper-3 p-3.5">
@@ -142,7 +144,7 @@ function Sidebar({
           />
           {categories.map((cat) => (
             <SidebarLink
-              key={cat.id}
+              key={cat.slug}
               label={cat.name}
               count={categoryCounts[cat.slug] || 0}
               active={activeCategory === cat.slug}
