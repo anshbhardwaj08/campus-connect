@@ -1,7 +1,14 @@
 const nodemailer = require('nodemailer');
 
+// Explicit host/port rather than `service: 'gmail'`, which defaults to port
+// 465 (implicit TLS). Plenty of networks and cloud hosts block 465 outbound
+// while leaving 587 open, and the failure looks like a hang — ETIMEDOUT at
+// connect, long before auth — which is easy to misread as bad credentials.
+// 587 + STARTTLS is the safer default. Override per environment if needed.
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: Number(process.env.SMTP_PORT) || 587,
+  secure: false, // STARTTLS is negotiated after connecting
   auth: {
     user: process.env.NODEMAILER_USER,
     pass: process.env.NODEMAILER_PASS,

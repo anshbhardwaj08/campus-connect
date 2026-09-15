@@ -1,9 +1,14 @@
-// User avatar image with a gradient-initials fallback when no photo exists
+// A square ink chip with initials — no circles, no gradients.
+//
+// When there IS a photo it is shown true to life, same as listing photos —
+// people should be recognisable from their avatar.
+
 const SIZES = {
-  sm: 'h-8 w-8 text-xs',
-  md: 'h-10 w-10 text-sm',
-  lg: 'h-14 w-14 text-lg',
-  xl: 'h-24 w-24 text-2xl',
+  xs: 'h-5 w-5 text-[8px]',
+  sm: 'h-7 w-7 text-[10px]',
+  md: 'h-10 w-10 text-[13px]',
+  lg: 'h-14 w-14 text-[18px]',
+  xl: 'h-24 w-24 text-[30px]',
 };
 
 export default function Avatar({ src, name = '', size = 'md', className = '' }) {
@@ -16,19 +21,18 @@ export default function Avatar({ src, name = '', size = 'md', className = '' }) 
 
   if (src) {
     return (
-      <img
-        src={src}
-        alt={name}
-        className={`${SIZES[size]} rounded-full object-cover ring-2 ring-white dark:ring-zinc-900 ${className}`}
-      />
+      <span className={`art photo shrink-0 border-2 border-ink ${SIZES[size]} ${className}`}>
+        <img src={src} alt={name} />
+      </span>
     );
   }
 
   return (
-    <div
-      className={`flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 font-bold text-white ring-2 ring-white dark:ring-zinc-900 ${SIZES[size]} ${className}`}
+    <span
+      className={`inline-flex shrink-0 items-center justify-center bg-ink font-extrabold tracking-[.03em] text-paper-3 ${SIZES[size]} ${className}`}
+      aria-hidden={name ? undefined : 'true'}
     >
       {initials || '?'}
-    </div>
+    </span>
   );
 }

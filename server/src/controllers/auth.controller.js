@@ -82,9 +82,24 @@ const sendOTP = catchAsync(async (req, res) => {
 
   const otp = generateOTP();
   await redisClient.set(`otp:${phone}`, otp, 'EX', 600);
-  await sendPhoneOTP(phone, otp);
+  const result = await sendPhoneOTP(phone, otp);
 
-  return res.status(200).json(new ApiResponse(200, null, 'OTP sent successfully'));
+  // With Twilio unconfigured the code is mocked, so hand it back to the
+  // client to make the flow completable in development. sms.service refuses
+  // to mock in production, so `mocked` can never be true there — but the
+  // NODE_ENV check stays as a second lock on leaking a live code.
+  const devOtp =
+    result?.mocked && process.env.NODE_ENV !== 'production' ? { devOtp: result.otp } : null;
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        devOtp,
+        result?.mocked ? 'OTP generated (SMS mocked — Twilio not configured)' : 'OTP sent successfully'
+      )
+    );
 });
 
 // POST /auth/verify-otp

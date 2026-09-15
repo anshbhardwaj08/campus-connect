@@ -6,6 +6,7 @@ const { createReviewSchema } = require('../validators/review.validator');
 
 const router = express.Router();
 
+router.get('/mine', verifyAccessToken, reviewController.getMine);
 router.get('/user/:id', reviewController.getForUser);
 router.get('/listing/:id', reviewController.getForListing);
 router.post('/', verifyAccessToken, validate(createReviewSchema), reviewController.create);

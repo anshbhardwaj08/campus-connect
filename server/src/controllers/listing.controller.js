@@ -21,10 +21,20 @@ const create = catchAsync(async (req, res) => {
   return res.status(201).json(new ApiResponse(201, { listing }, 'Listing created'));
 });
 
+// Escapes user input before it goes into a RegExp, so a stray "(" or "*"
+// in a search box is treated as a character and not as syntax.
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const SORTS = {
+  recent: { isBumped: -1, createdAt: -1 },
+  'price-asc': { price: 1, createdAt: -1 },
+  'price-desc': { price: -1, createdAt: -1 },
+};
+
 // GET /listings
 const getAll = catchAsync(async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
-  const { category, condition, minPrice, maxPrice } = req.query;
+  const { q, category, condition, minPrice, maxPrice, sort } = req.query;
 
   const filter = { status: 'active' };
   if (category) filter.category = category;
@@ -35,12 +45,22 @@ const getAll = catchAsync(async (req, res) => {
     if (maxPrice) filter.price.$lte = Number(maxPrice);
   }
 
+  // Search is a case-insensitive regex rather than the model's $text index,
+  // because the UI searches as you type: $text matches whole words only, so
+  // "cyc" would return nothing for "cycle" and search would feel broken
+  // mid-word. The tradeoff is that this does not use an index — fine at
+  // campus scale, but move to $text or Atlas Search if volume grows.
+  if (q && q.trim()) {
+    const rx = new RegExp(escapeRegex(q.trim()), 'i');
+    filter.$or = [{ title: rx }, { description: rx }];
+  }
+
   const [listings, total] = await Promise.all([
     Listing.find(filter)
-      .sort({ isBumped: -1, createdAt: -1 })
+      .sort(SORTS[sort] || SORTS.recent)
       .skip(skip)
       .limit(limit)
-      .populate('sellerId', 'name avatar trustScore'),
+      .populate('sellerId', 'name avatar trustScore isEmailVerified'),
     Listing.countDocuments(filter),
   ]);
 
@@ -53,7 +73,7 @@ const getAll = catchAsync(async (req, res) => {
 const getById = catchAsync(async (req, res) => {
   const listing = await Listing.findById(req.params.id).populate(
     'sellerId',
-    'name avatar trustScore dealsCompleted'
+    'name avatar trustScore dealsCompleted isEmailVerified'
   );
   if (!listing) throw new ApiError(404, 'Listing not found');
 

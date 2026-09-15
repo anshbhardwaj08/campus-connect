@@ -1,46 +1,42 @@
 /** @type {import('tailwindcss').Config} */
+
+// Comic Noir design tokens. These are the ONLY colours in the system.
+// There is no second accent, no orange, no gold, no gradient anywhere.
+// See docs/design-system.md before adding anything here.
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
-  darkMode: 'class',
   theme: {
     extend: {
-      fontFamily: {
-        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+      colors: {
+        ink: '#0B0D11',      // borders, text, gutters. True black, never tinted grey
+        paper: {
+          DEFAULT: '#E7E3D8', // page background. Cool newsprint, NOT cream
+          2: '#D3CEC1',       // caption boxes
+          3: '#F2EFE7',       // panel interiors, input fields
+        },
+        crimson: '#C0353A',  // THE ONLY ACCENT
+        slate: '#1B2536',    // night panels, dark splash areas
+        ice: '#AFC4D8',      // cold panels, incoming bubbles, avatars
+        steel: '#5A6B80',    // secondary and meta text
       },
-      backgroundImage: {
-        'brand-gradient': 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%)',
-        'brand-gradient-soft': 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 50%, #fdf4ff 100%)',
+      fontFamily: {
+        // Bangers is for the wordmark, splash headlines, price slabs and
+        // button labels ONLY. Never body text, never a full sentence.
+        display: ['Bangers', 'Impact', 'cursive'],
+        sans: ['"Work Sans"', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        soft: '0 2px 10px rgba(15, 23, 42, 0.06)',
-        'soft-lg': '0 12px 40px rgba(76, 29, 149, 0.12)',
-        glow: '0 0 0 4px rgba(139, 92, 246, 0.15)',
+        // Hard offsets only. Never a blur value anywhere in this system.
+        hard: '4px 4px 0 #0B0D11',
+        'hard-sm': '3px 3px 0 #0B0D11',
+        'hard-lg': '6px 6px 0 #0B0D11',
+        'hard-crimson': '3px 3px 0 #C0353A',
       },
-      keyframes: {
-        shimmer: {
-          '100%': { transform: 'translateX(100%)' },
-        },
-        'fade-in-up': {
-          '0%': { opacity: 0, transform: 'translateY(8px)' },
-          '100%': { opacity: 1, transform: 'translateY(0)' },
-        },
-        drift: {
-          '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
-          '33%': { transform: 'translate(6%, -8%) scale(1.08)' },
-          '66%': { transform: 'translate(-5%, 6%) scale(0.95)' },
-        },
-        'pulse-glow': {
-          '0%, 100%': { opacity: 0.6 },
-          '50%': { opacity: 1 },
-        },
+      borderRadius: {
+        // Nothing in this system rounds past 4px except speech bubbles.
+        bubble: '18px',
       },
-      animation: {
-        shimmer: 'shimmer 1.6s infinite',
-        'fade-in-up': 'fade-in-up 0.4s ease-out',
-        'drift-slow': 'drift 18s ease-in-out infinite',
-        'drift-slower': 'drift 26s ease-in-out infinite reverse',
-        'pulse-glow': 'pulse-glow 3s ease-in-out infinite',
-      },
+      // Motion lives in src/lib/motion.js (GSAP). Nothing here.
     },
   },
   plugins: [],

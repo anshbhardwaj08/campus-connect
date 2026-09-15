@@ -1,45 +1,95 @@
-// Primary interactive button with gradient/outline/ghost/danger variants
+// Bangers label, 3px ink border, hard 4px offset shadow with no blur.
+// On :active the button translates 4px and the shadow collapses to zero,
+// so it presses physically. Minimum height 46px — that is the tap target
+// floor for the whole system.
+//
+// `primary` is crimson. Remember there is only ever ONE crimson element in
+// a screen region, so a panel with a crimson button gets a paper caption.
+// `link` is an underlined text button, for secondary actions — never put
+// two filled buttons next to each other. Pass `tone="paper"` when a link
+// button sits on an ink ground (the masthead, a night panel) so the text
+// stays legible instead of defaulting to ink-on-ink.
+
 import { forwardRef } from 'react';
-import { Loader2 } from 'lucide-react';
 
 const VARIANTS = {
-  primary:
-    'bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-lg shadow-violet-500/25 hover:shadow-xl hover:shadow-violet-500/35 hover:-translate-y-0.5 focus-visible:ring-violet-300',
-  secondary:
-    'bg-violet-50 text-violet-700 hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20 focus-visible:ring-violet-200',
-  outline:
-    'border border-zinc-200 text-zinc-700 hover:border-violet-300 hover:bg-violet-50/50 hover:text-violet-700 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-violet-500 dark:hover:bg-violet-500/10 focus-visible:ring-violet-200',
-  ghost:
-    'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 focus-visible:ring-zinc-200',
-  danger:
-    'bg-red-500 text-white shadow-lg shadow-red-500/25 hover:bg-red-600 hover:shadow-xl hover:shadow-red-500/30 focus-visible:ring-red-300',
+  primary: 'bg-crimson text-paper-3 border-ink shadow-hard',
+  ink: 'bg-ink text-paper-3 border-ink shadow-hard',
+  paper: 'bg-paper-3 text-ink border-ink shadow-hard',
+  cold: 'bg-ice text-ink border-ink shadow-hard',
 };
 
 const SIZES = {
-  sm: 'text-sm px-3.5 py-1.5 rounded-lg gap-1.5',
-  md: 'text-sm px-5 py-2.5 rounded-xl gap-2',
-  lg: 'text-base px-6 py-3.5 rounded-xl gap-2',
+  sm: 'text-[15px] px-3.5 min-h-[46px] gap-2',
+  md: 'text-[17px] px-5 min-h-[46px] gap-2',
+  lg: 'text-[20px] px-6 min-h-[54px] gap-2.5',
 };
 
 const Button = forwardRef(
   (
-    { children, variant = 'primary', size = 'md', loading = false, disabled, className = '', ...props },
+    {
+      children,
+      variant = 'primary',
+      size = 'md',
+      loading = false,
+      disabled,
+      tone = 'ink', // link variant only: 'ink' (paper grounds) | 'paper' (ink grounds)
+      className = '',
+      ...props
+    },
     ref
   ) => {
+    // Underlined text button. Carries no fill and no border, so it never
+    // competes with the one crimson action on screen.
+    if (variant === 'link') {
+      return (
+        <button
+          ref={ref}
+          disabled={disabled || loading}
+          className={`inline-flex min-h-[46px] items-center justify-center gap-1.5 font-sans text-[13px] font-extrabold uppercase tracking-[.07em] underline decoration-2 underline-offset-4 transition-colors hover:text-crimson disabled:pointer-events-none disabled:opacity-45 ${
+            tone === 'paper' ? 'text-paper-3' : 'text-ink'
+          } ${className}`}
+          {...props}
+        >
+          {children}
+        </button>
+      );
+    }
+
     return (
       <button
         ref={ref}
         disabled={disabled || loading}
-        className={`inline-flex items-center justify-center whitespace-nowrap font-semibold tracking-tight transition-all duration-200 focus-visible:outline-none focus-visible:ring-4 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] active:translate-y-0 ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+        className={`inline-flex select-none items-center justify-center whitespace-nowrap border-[3px] font-display uppercase leading-none tracking-[.04em] transition-[transform,box-shadow] duration-75 active:translate-x-1 active:translate-y-1 active:shadow-none disabled:pointer-events-none disabled:opacity-45 ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
         {...props}
       >
-        {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-        {children}
+        {loading ? <Spinner /> : children}
       </button>
     );
   }
 );
 
 Button.displayName = 'Button';
+
+// No spinner library, no blur, no gradient. Three dots that blink in
+// sequence — the printed equivalent of a loading state.
+function Spinner() {
+  return (
+    <span className="inline-flex items-center gap-1" aria-label="Working">
+      <Dot delay="0ms" />
+      <Dot delay="150ms" />
+      <Dot delay="300ms" />
+    </span>
+  );
+}
+
+function Dot({ delay }) {
+  return (
+    <span
+      className="h-1.5 w-1.5 bg-current"
+      style={{ animation: 'blink 900ms steps(1,end) infinite', animationDelay: delay }}
+    />
+  );
+}
 
 export default Button;

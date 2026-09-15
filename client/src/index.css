@@ -2,35 +2,439 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
-  scroll-behavior: smooth;
+/* ===========================================================================
+   COLLEGE OLX — COMIC NOIR
+   A graphic-novel page rendered as a UI.
+
+   Tokens live here and in tailwind.config.js only. Never invent a colour.
+   There is no second accent. If something needs emphasis and crimson is
+   already used nearby, reach for weight or size, not a new colour.
+   =========================================================================== */
+
+:root {
+  --ink: #0b0d11;
+  --paper: #e7e3d8;
+  --paper-2: #d3cec1;
+  --paper-3: #f2efe7;
+  --crimson: #c0353a;
+  --slate: #1b2536;
+  --ice: #afc4d8;
+  --steel: #5a6b80;
+
+  /* The jagged inked panel edge. Insets stay under 1% on purpose — pushing
+     them further makes the page look like a torn-paper template. */
+  --cut-1: polygon(0.4% 0.8%, 99.6% 0%, 100% 99.2%, 0% 100%);
+  --cut-2: polygon(0% 0.6%, 99.5% 0%, 100% 99.4%, 0.5% 100%);
+
+  color-scheme: light;
 }
 
-body {
-  margin: 0;
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-  background-color: #fafafa;
-  color: #18181b;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    font-family: "Work Sans", system-ui, sans-serif;
+    font-weight: 500;
+    color: var(--ink);
+    background-color: var(--paper);
+    /* Halftone is the texture of the whole system. 4px screen on the page. */
+    background-image: radial-gradient(rgba(27, 37, 54, 0.19) 1px, transparent 1.15px);
+    background-size: 4px 4px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: var(--crimson);
+    color: var(--paper-3);
+  }
+
+  /* Accessibility floor: visible focus rings in crimson, 3px, 2px offset. */
+  :focus-visible {
+    outline: 3px solid var(--crimson);
+    outline-offset: 2px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--steel) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--steel);
+    border: 2px solid var(--paper);
+  }
 }
 
-:root.dark body {
-  background-color: #0b0b0f;
-  color: #f4f4f5;
+@layer components {
+  /* --- The panel: the only container in this system ----------------------
+     Two-layer sandwich. The outer layer is the inked border, the inner layer
+     is the paper. Both clipped so the border reads as hand-inked. */
+  .panel {
+    background: var(--ink);
+    padding: 3px;
+    clip-path: var(--cut-1);
+    position: relative;
+  }
+
+  .panel__in {
+    background: var(--paper-3);
+    clip-path: var(--cut-1);
+    height: 100%;
+    padding: 11px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Panel interior variants. Flat fills only. */
+  .panel__in--night {
+    background: var(--slate);
+    color: var(--paper-3);
+  }
+
+  .panel__in--cold {
+    background: var(--ice);
+  }
+
+  .panel__in--crimson {
+    background: var(--crimson);
+    color: var(--paper-3);
+  }
+
+  .panel__in--flush {
+    padding: 0;
+  }
+
+  /* --- Halftone screens --------------------------------------------------
+     Dots scale with the content. Coarse for flat colour, fine for photos.
+     A single dot size across the page reads as wallpaper, not printing. */
+  .screen-coarse {
+    background-image: radial-gradient(rgba(11, 13, 17, 0.22) 1.6px, transparent 1.75px);
+    background-size: 7px 7px;
+  }
+
+  .screen-fine {
+    background-image: radial-gradient(rgba(11, 13, 17, 0.34) 1.2px, transparent 1.3px);
+    background-size: 3.6px 3.6px;
+  }
+
+  .screen-night {
+    background-image: radial-gradient(rgba(175, 196, 216, 0.17) 1.5px, transparent 1.65px);
+    background-size: 7px 7px;
+  }
+
+  /* Art well: the image area of a listing panel. */
+  .art {
+    position: relative;
+    background: var(--paper-3);
+    background-image: radial-gradient(rgba(11, 13, 17, 0.22) 1.6px, transparent 1.75px);
+    background-size: 7px 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  /* --- Photographs: shown TRUE TO LIFE, deliberately unstyled ------------
+     This is the one place the theme gives way, and it is a product decision
+     rather than a stylistic one.
+
+     The print treatment used to be grayscale + multiply onto the halftone
+     screen, which looked right on the page — but a buyer cannot judge an
+     item's real colour or condition through it, and a marketplace photo
+     that misrepresents the goods is a trust problem. Trust outranks the
+     aesthetic here.
+
+     So: no grayscale, no filter, no blend mode. The theme still does its
+     work through the frame around the photo — the inked panel edge, the
+     price slab, the caption — and the halftone screen below still shows
+     for placeholders and while an image loads.
+
+     Do NOT reintroduce a filter here. See docs/design-system.md §5. */
+  .art.photo {
+    background: var(--paper-3);
+    background-size: 3.6px 3.6px;
+    background-image: radial-gradient(rgba(11, 13, 17, 0.34) 1.2px, transparent 1.3px);
+  }
+
+  .art.photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* --- Caption box -------------------------------------------------------
+     Narration, not a label. "Meanwhile, two floors up" is a caption.
+     "Product details" is a heading and belongs in Work Sans.
+     One per panel, maximum. Outer edges drop their border so it sits flush. */
+  .caption {
+    position: absolute;
+    z-index: 10;
+    background: var(--paper-2);
+    border: 2px solid var(--ink);
+    color: var(--ink);
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 4px 8px 3px;
+    line-height: 1.15;
+    max-width: 72%;
+  }
+
+  .caption--crimson {
+    background: var(--crimson);
+    color: var(--paper-3);
+  }
+
+  .caption--tl {
+    top: 0;
+    left: 0;
+    border-top: 0;
+    border-left: 0;
+  }
+
+  .caption--tr {
+    top: 0;
+    right: 0;
+    border-top: 0;
+    border-right: 0;
+    text-align: right;
+  }
+
+  .caption--bl {
+    bottom: 0;
+    left: 0;
+    border-bottom: 0;
+    border-left: 0;
+  }
+
+  .caption--br {
+    bottom: 0;
+    right: 0;
+    border-bottom: 0;
+    border-right: 0;
+    text-align: right;
+  }
+
+  /* --- Price slab --------------------------------------------------------
+     Bangers, ink ground, paper text, pinned bottom-right of the art well.
+     Crimson ground when the item is free. */
+  .slab {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    background: var(--ink);
+    color: var(--paper-3);
+    font-family: "Bangers", Impact, cursive;
+    font-size: 19px;
+    letter-spacing: 0.035em;
+    padding: 3px 9px 1px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    transform-origin: right center;
+  }
+
+  .slab--free {
+    background: var(--crimson);
+  }
+
+  .slab__was {
+    font-family: "Work Sans", system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--steel);
+    text-decoration: line-through;
+  }
+
+  /* --- Speech bubble -----------------------------------------------------
+     The one place a radius over 4px is allowed. The tail is two stacked
+     triangles: the outer draws the ink edge, the inner fills it. */
+  .bubble {
+    position: relative;
+    border: 2px solid var(--ink);
+    border-radius: 18px;
+    padding: 9px 13px;
+    max-width: 78%;
+    font-size: 13.5px;
+    font-weight: 500;
+    line-height: 1.45;
+  }
+
+  .bubble--in {
+    background: var(--paper-3);
+    border-bottom-left-radius: 4px;
+  }
+
+  .bubble--out {
+    background: var(--ice);
+    border-bottom-right-radius: 4px;
+  }
+
+  .bubble::before,
+  .bubble::after {
+    content: "";
+    position: absolute;
+    bottom: -2px;
+    width: 0;
+    height: 0;
+    border-style: solid;
+  }
+
+  .bubble--in::before {
+    left: -9px;
+    border-width: 0 0 14px 11px;
+    border-color: transparent transparent var(--ink) transparent;
+  }
+
+  .bubble--in::after {
+    left: -4px;
+    border-width: 0 0 11px 8px;
+    border-color: transparent transparent var(--paper-3) transparent;
+  }
+
+  .bubble--out::before {
+    right: -9px;
+    border-width: 0 11px 14px 0;
+    border-color: transparent transparent var(--ink) transparent;
+  }
+
+  .bubble--out::after {
+    right: -4px;
+    border-width: 0 8px 11px 0;
+    border-color: transparent transparent var(--ice) transparent;
+  }
+
+  /* --- Typography helpers ----------------------------------------------- */
+  .label-xs {
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--steel);
+  }
+
+  .meta {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--steel);
+  }
 }
 
-::selection {
-  background-color: #c4b5fd;
-  color: #1e1b4b;
+/* --- Motion --------------------------------------------------------------
+   GSAP owns every motion in this system — see src/lib/motion.js. Panel wipes,
+   price slabs, caption stamps and the auth splash are all tweened from there,
+   so there are no clip-path keyframes here any more.
+
+   What is left below is the small stuff that is genuinely a CSS loop: the
+   button's loading dots and the skeleton's breath. Those still need the
+   reduced-motion guard at the bottom of this file; GSAP checks the same
+   preference itself in lib/motion.js.
+   ------------------------------------------------------------------------ */
+
+/* Skeleton blocks sit and breathe. No shimmer sweep — that needs a gradient. */
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.85;
+  }
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #d4d4d8 transparent;
+/* Loading state: three dots blinking in sequence. No spinner, no blur. */
+@keyframes blink {
+  0%,
+  40% {
+    opacity: 1;
+  }
+  41%,
+  100% {
+    opacity: 0.2;
+  }
 }
 
-.gradient-text {
-  background-image: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* --- Toasts --------------------------------------------------------------
+   Sonner injects its own stylesheet at runtime and owns the toast's layout,
+   stacking and mount animation. We only repaint it, which is why these rules
+   live outside @layer and carry !important — sonner's [data-sonner-toast]
+   attribute selectors are injected after Tailwind's utilities.
+
+   Never pass `unstyled: true` in App.jsx to do this instead: it drops the
+   [data-styled] rule that supplies width, display and padding, and the toast
+   collapses to nothing.
+   ------------------------------------------------------------------------ */
+
+[data-sonner-toaster] {
+  --border-radius: 0px;
+  --normal-bg: var(--paper-3);
+  --normal-text: var(--ink);
+  --normal-border: var(--ink);
+  font-family: "Work Sans", system-ui, sans-serif;
+}
+
+[data-sonner-toast] {
+  border-width: 3px !important;
+  border-style: solid !important;
+  border-color: var(--ink) !important;
+  border-radius: 0 !important;
+  box-shadow: 4px 4px 0 var(--ink) !important;
+  font-weight: 700 !important;
+  align-items: flex-start !important;
+}
+
+[data-sonner-toast] [data-title] {
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+[data-sonner-toast] [data-description] {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--steel);
+}
+
+/* Errors take crimson — the only accent, and the only state that gets one.
+   Success reads through wording and weight, on the same paper ground. */
+[data-sonner-toast][data-type="error"] {
+  background: var(--crimson) !important;
+}
+
+[data-sonner-toast][data-type="error"] [data-title],
+[data-sonner-toast][data-type="error"] [data-description] {
+  color: var(--paper-3);
+}
+
+[data-sonner-toast] [data-close-button] {
+  border: 2px solid var(--ink) !important;
+  border-radius: 0 !important;
+  background: var(--paper-2) !important;
+  color: var(--ink) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

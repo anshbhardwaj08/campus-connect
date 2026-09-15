@@ -7,6 +7,7 @@ const router = express.Router();
 router.use(verifyAccessToken);
 
 router.post('/', dealController.createDeal);
+router.post('/from-conversation', dealController.createFromConversation);
 router.post('/:id/generate-code', dealController.generateCode);
 router.post('/:id/verify-code', dealController.verifyCode);
 router.patch('/:id/buyer-confirm', dealController.buyerConfirm);

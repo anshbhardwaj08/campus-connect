@@ -4,12 +4,12 @@ import { setCredentials, logout as logoutAction } from '../store/slices/authSlic
 
 export const useAuth = () => {
   const dispatch = useDispatch();
-  const { user, token, isAuthenticated } = useSelector((state) => state.auth);
+  const { user, token, isAuthenticated, ready } = useSelector((state) => state.auth);
 
   const login = (user, token) => dispatch(setCredentials({ user, token }));
   const logout = () => dispatch(logoutAction());
 
-  return { user, token, isAuthenticated, login, logout };
+  return { user, token, isAuthenticated, ready, login, logout };
 };
 
 export default useAuth;

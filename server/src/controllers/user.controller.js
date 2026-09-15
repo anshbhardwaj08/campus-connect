@@ -44,13 +44,53 @@ const getMyDeals = catchAsync(async (req, res) => {
   const filter = { $or: [{ buyerId: req.user._id }, { sellerId: req.user._id }] };
 
   const [deals, total] = await Promise.all([
-    Deal.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Deal.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('listingId', 'title images price')
+      .populate('buyerId', 'name avatar')
+      .populate('sellerId', 'name avatar'),
     Deal.countDocuments(filter),
   ]);
 
   return res
     .status(200)
     .json(new ApiResponse(200, { deals }, 'Deals fetched', buildPagination(page, limit, total)));
+});
+
+// GET /users/:id
+// The public face of a student: what a buyer sees before meeting a stranger
+// at a gate. Deliberately a narrow projection — never the whole document,
+// which carries phone, email, refreshToken and passwordHash.
+const getPublicProfile = catchAsync(async (req, res) => {
+  const user = await User.findById(req.params.id).select(
+    'name avatar dept batch trustScore dealsCompleted isEmailVerified createdAt'
+  );
+  if (!user) throw new ApiError(404, 'User not found');
+
+  return res.status(200).json(new ApiResponse(200, { user }, 'Profile fetched'));
+});
+
+// GET /users/:id/listings
+// Only what is still on the page — someone else's expired or rejected
+// listings are not the public's business.
+const getUserListings = catchAsync(async (req, res) => {
+  const { page, limit, skip } = paginate(req.query);
+  const filter = { sellerId: req.params.id, status: { $in: ['active', 'sold'] } };
+
+  const [listings, total] = await Promise.all([
+    Listing.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('sellerId', 'name avatar trustScore isEmailVerified'),
+    Listing.countDocuments(filter),
+  ]);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { listings }, 'Listings fetched', buildPagination(page, limit, total)));
 });
 
 // POST /users/:id/block
@@ -68,7 +108,12 @@ const getUserReviews = catchAsync(async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
 
   const [reviews, total] = await Promise.all([
-    Review.find({ revieweeId: id }).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Review.find({ revieweeId: id })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('reviewerId', 'name avatar')
+      .populate('listingId', 'title'),
     Review.countDocuments({ revieweeId: id }),
   ]);
 
@@ -82,6 +127,8 @@ module.exports = {
   updateProfile,
   getMyListings,
   getMyDeals,
+  getPublicProfile,
+  getUserListings,
   blockUser,
   getUserReviews,
 };

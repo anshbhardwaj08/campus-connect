@@ -1,16 +1,22 @@
-// Small pill-shaped status/label badge (listing status, condition, etc.)
+// A printed stamp, not a pill. Flat fill, 2px ink border, no radius.
+//
+// Success, warning and info states all use ink, steel and crimson at
+// different weights and fills — do NOT add a second accent when a state
+// needs a colour. Because colour alone must never carry meaning, every
+// tone here also differs in fill and weight.
+
 const TONES = {
-  neutral: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
-  brand: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
-  success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
-  warning: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
-  danger: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+  ink: 'bg-ink text-paper-3 border-ink',
+  paper: 'bg-paper-2 text-ink border-ink',
+  crimson: 'bg-crimson text-paper-3 border-ink',
+  cold: 'bg-ice text-ink border-ink',
+  outline: 'bg-transparent text-ink border-ink',
 };
 
-export default function Badge({ children, tone = 'neutral', className = '' }) {
+export default function Badge({ children, tone = 'paper', className = '' }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${TONES[tone]} ${className}`}
+      className={`inline-flex items-center border-2 px-2 py-[3px] text-[9.5px] font-extrabold uppercase leading-none tracking-[.08em] ${TONES[tone]} ${className}`}
     >
       {children}
     </span>

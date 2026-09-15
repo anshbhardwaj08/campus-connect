@@ -1,4 +1,6 @@
 const express = require('express');
+const validate = require('../middleware/validate');
+const { createLostFoundSchema } = require('../validators/community.validator');
 const lostFoundController = require('../controllers/lostfound.controller');
 const { verifyAccessToken } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -9,7 +11,7 @@ router.get('/', lostFoundController.getAll);
 
 router.use(verifyAccessToken);
 
-router.post('/', upload.array('images', 6), lostFoundController.post);
+router.post('/', upload.array('images', 6), validate(createLostFoundSchema), lostFoundController.post);
 router.patch('/:id/resolve', lostFoundController.markResolved);
 
 module.exports = router;

@@ -1,7 +1,35 @@
 const jwt = require('jsonwebtoken');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
-const { setSocketIO } = require('../services/notification.service');
+const User = require('../models/User');
+const { setSocketIO, createNotification } = require('../services/notification.service');
+
+// Everyone in the thread except the sender. A socket only receives
+// `chat:message` if it has joined the conversation room, which means it is
+// looking at the thread right now — so the other participant needs a
+// notification to hear about it at all.
+const notifyOtherParticipants = async (conversation, senderId, buildTitle, message) => {
+  if (!conversation) return;
+  const others = conversation.participants.filter((p) => String(p) !== String(senderId));
+  if (!others.length) return;
+
+  // "Aman Bedi" is a far more useful notification than "New message" —
+  // worth one lean lookup per message.
+  const sender = await User.findById(senderId).select('name').lean();
+  const title = buildTitle(sender?.name || 'Someone');
+
+  await Promise.all(
+    others.map((userId) =>
+      createNotification({
+        userId,
+        type: 'message',
+        title,
+        message,
+        link: `/chat?conversation=${conversation._id}`,
+      }).catch(() => {})
+    )
+  );
+};
 
 const setupSocket = (io) => {
   setSocketIO(io);
@@ -50,12 +78,22 @@ const setupSocket = (io) => {
           type,
         });
 
-        await Conversation.findByIdAndUpdate(conversationId, {
-          lastMessage: type === 'text' ? text : `[${type}]`,
-          lastMessageAt: new Date(),
-        });
+        const conversation = await Conversation.findByIdAndUpdate(
+          conversationId,
+          {
+            lastMessage: type === 'text' ? text : `[${type}]`,
+            lastMessageAt: new Date(),
+          },
+          { new: true }
+        );
 
         io.to(`conversation:${conversationId}`).emit('chat:message', message);
+        await notifyOtherParticipants(
+          conversation,
+          socket.userId,
+          (name) => `${name} messaged you`,
+          type === 'text' ? text : `Sent ${type === 'image' ? 'a photo' : 'an offer'}`
+        );
       } catch (err) {
         socket.emit('error', { message: 'Failed to send message' });
       }
@@ -70,13 +108,23 @@ const setupSocket = (io) => {
           type: 'offer',
         });
 
-        await Conversation.findByIdAndUpdate(conversationId, {
-          lastMessage: `Offer: ₹${offerAmount}`,
-          lastMessageAt: new Date(),
-          dealStatus: 'offered',
-        });
+        const conversation = await Conversation.findByIdAndUpdate(
+          conversationId,
+          {
+            lastMessage: `Offer: ₹${offerAmount}`,
+            lastMessageAt: new Date(),
+            dealStatus: 'offered',
+          },
+          { new: true }
+        );
 
         io.to(`conversation:${conversationId}`).emit('chat:offer', message);
+        await notifyOtherParticipants(
+          conversation,
+          socket.userId,
+          (name) => `${name} made an offer`,
+          `₹${offerAmount}`
+        );
       } catch (err) {
         socket.emit('error', { message: 'Failed to send offer' });
       }
