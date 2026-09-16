@@ -2,10 +2,10 @@
 // The logic lives in services/rentalDue.service.js; this file only wires it
 // to a schedule.
 
-const Queue = require('bull');
+const { createQueue } = require('./queue');
 const { runRentalDueCheck } = require('../services/rentalDue.service');
 
-const rentalDueQueue = new Queue('rentalDue', process.env.REDIS_URL);
+const rentalDueQueue = createQueue('rentalDue');
 
 rentalDueQueue.process(async () => {
   const result = await runRentalDueCheck();

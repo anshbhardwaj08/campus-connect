@@ -6,7 +6,9 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "preflight": "node scripts/preflight.js",
+    "rotate-password": "node scripts/rotate-password.js"
   },
   "dependencies": {
     "express": "^4.19.2",

@@ -1,7 +1,7 @@
-const Queue = require('bull');
+const { createQueue } = require('./queue');
 const Listing = require('../models/Listing');
 
-const bumpExpiryQueue = new Queue('bumpExpiry', process.env.REDIS_URL);
+const bumpExpiryQueue = createQueue('bumpExpiry');
 
 bumpExpiryQueue.process(async () => {
   const result = await Listing.updateMany(

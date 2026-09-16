@@ -19,6 +19,15 @@ const dealSchema = new mongoose.Schema(
     // --- Rentals only -----------------------------------------------------
     // How long the hire was agreed for, settled when the owner accepts.
     rentalDays: { type: Number, min: 1 },
+    // Copied from the listing at accept, not read back from it later: the
+    // owner can edit the listing mid-hire, and what matters afterwards is
+    // the figure the two of them agreed. Same reason finalPrice is stored
+    // here rather than looked up.
+    //
+    // The platform never holds this. It is cash between two students, like
+    // the price — recording it is so the deal can remind them both, not a
+    // claim that anything is in escrow.
+    securityDeposit: { type: Number, min: 0, default: 0 },
     // When it is due back. Set at handover, not at agreement: the clock a
     // renter has in mind starts when the thing is actually in their hands,
     // and the meetup can be days after the deal was struck.

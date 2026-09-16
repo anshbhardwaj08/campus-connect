@@ -149,10 +149,16 @@ export default function ListingDetail({
                 <Fact icon={Eye} label="Views" value={viewCount ?? 0} />
               </dl>
 
+              {/* The old wording here ("the deposit comes back when the
+                  owner does") said nothing useful and implied the platform
+                  was involved. It is not: every rupee changes hands between
+                  the two of you, same as a sale. */}
               {isRent && (
                 <p className="meta mt-3 border-l-[3px] border-ink/20 pl-2.5 leading-relaxed">
-                  Agree how long you need it for in the chat. The deposit comes back when
-                  the owner does.
+                  Agree how long you need it for in the chat.
+                  {securityDeposit
+                    ? ` You hand the owner ${formatPrice(securityDeposit)} at the gate and they give it back when you return it — College OLX never holds it.`
+                    : ' The owner is not asking for a deposit.'}
                 </p>
               )}
 

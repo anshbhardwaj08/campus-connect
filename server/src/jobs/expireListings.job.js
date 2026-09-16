@@ -1,7 +1,7 @@
-const Queue = require('bull');
+const { createQueue } = require('./queue');
 const Listing = require('../models/Listing');
 
-const expireListingsQueue = new Queue('expireListings', process.env.REDIS_URL);
+const expireListingsQueue = createQueue('expireListings');
 
 expireListingsQueue.process(async () => {
   const result = await Listing.updateMany(

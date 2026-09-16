@@ -1,7 +1,7 @@
-const Queue = require('bull');
+const { createQueue } = require('./queue');
 const { runSavedSearchAlerts } = require('../services/savedSearch.service');
 
-const savedSearchAlertQueue = new Queue('savedSearchAlert', process.env.REDIS_URL);
+const savedSearchAlertQueue = createQueue('savedSearchAlert');
 
 savedSearchAlertQueue.process(async () => {
   const result = await runSavedSearchAlerts();

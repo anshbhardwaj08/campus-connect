@@ -22,6 +22,11 @@ verified against the live API.
   overdue it is. A daily job nudges the renter the day before and both sides
   once it is late. "They returned it" ends the hire and puts the listing
   back on the page in one action
+- **The deposit** — copied onto the deal at accept so a later edit to the
+  listing cannot rewrite what was agreed, then named at every point money
+  moves, from that person's side. **Nothing on the platform holds it** — it
+  is cash between two students, and the UI says so rather than letting
+  anyone assume otherwise
 - **Chat** — inbox, live messages over Socket.io, offers, accept-offer.
   Threads attach to a listing **or** a community post (`subject`)
 - **Deals** — verify-code handshake, confirmations, review after closing.

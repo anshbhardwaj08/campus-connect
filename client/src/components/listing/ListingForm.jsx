@@ -251,7 +251,10 @@ export default function ListingForm({ listing = null, onTypeChange }) {
               step="1"
               placeholder="0"
               error={errors.securityDeposit?.message}
-              hint="Held while they have it, returned when you get it back. Leave at zero if you are not asking for one."
+              // "Held" on its own reads as "held by College OLX". It is not:
+              // this is cash the renter puts in the owner's hand, and the
+              // owner gives back. Nothing here touches money.
+              hint="They hand this to you at the gate and you give it back when you get the item back. College OLX never holds it. Leave at zero if you are not asking for one."
               {...register('securityDeposit')}
             />
           )}

@@ -786,7 +786,7 @@ records by row position in a test against a database that holds real data**
 
 ### Demo content lives in the database on purpose (2026-09-15)
 Six demo students (Priya Sharma, Rohan Mehta, Ananya Iyer, Karan Singh,
-Simran Kaur, Vikram Rao — all `@pec.edu.in`, password `Passw0rd123`), their
+Simran Kaur, Vikram Rao — all `@pec.edu.in`), their
 listings, two events, two open reports, two scam-flagged pending listings
 and four deals (one completed through the real handshake, the rest seeded)
 were created so the admin lists and the student site are not empty. **This
@@ -795,10 +795,16 @@ is not test data to clean up** — it was left deliberately.
 Two things about it worth knowing:
 - Real accounts already in the database (Ansh, Gopal, Pulkit, prithvi) were
   never posted-as or modified. All demo content belongs to demo accounts.
-- `moderator.demo@pec.edu.in` (password `Passw0rd123`) is a **moderator**
-  account kept for signing into the panel. It was briefly promoted to admin
-  to verify the admin-only paths and put back. **Delete it or change its
-  password before this is ever deployed.**
+- `moderator.demo@pec.edu.in` is a **moderator** account kept for signing
+  into the panel — it is the only way to exercise the moderator role, which
+  is genuinely narrower than admin. It was briefly promoted to admin to
+  verify the admin-only paths and put back.
+
+**Every one of these shared the same password until 2026-09-16.** They have
+been rotated to random ones; the demo students' are discardable (nothing
+needs to sign in as them) and the moderator's was handed to the project
+owner. No password is written down in this repo any more — run
+`npm run preflight` to check that stays true.
 
 ### "Report this" on the client — the moderation loop is closed (2026-09-15)
 `POST /reports` and the admin queue had both worked for a while, but
@@ -1209,6 +1215,58 @@ accept prompt and the due / overdue / returned states. All throwaway accounts
 removed, then a sweep confirmed nothing was left behind — which caught two
 accounts from a run that had timed out earlier.
 
+### The deposit says who is holding it (2026-09-16)
+
+A rental's `securityDeposit` lived on the listing and went no further. The
+deal never carried it, the meetup never mentioned it, and the return said
+nothing — and the form's hint said it was "held", which reads as *held by
+College OLX*. On a marketplace where every rupee moves between two students
+in person, that is exactly the wrong thing to imply.
+
+- **`Deal.securityDeposit`** is copied from the listing at accept, not read
+  back later. The owner can edit the listing mid-hire; what matters
+  afterwards is the figure the two of them agreed. Same reasoning as
+  `finalPrice` living on the deal.
+- It is now said at each point money moves, **from that person's side**: the
+  accept prompt tells the owner to collect it, the handover notifications
+  say "they are holding yours" / "you are holding theirs", the deal card
+  prints it beside the price, and the return tells one to hand it back and
+  the other to ask.
+- **"College OLX never holds it"** appears on the listing and on the owner's
+  deal card. A deposit is the one figure people assume a marketplace is
+  keeping safe for them.
+- A rental with no deposit says *"The owner is not asking for a deposit"*
+  rather than inventing one.
+
+Found while testing: the conversation's populated listing was missing
+`securityDeposit`, so the accept prompt silently showed nothing. Populate
+lists are easy to forget — `chat.controller.js` now selects the rental
+fields alongside the rest.
+
+Verified 17 checks end to end — the snapshot surviving a later edit to the
+listing, both sides' wording at handover, the card, both sides' wording at
+return, and a no-deposit rental staying silent.
+
+### A Redis outage no longer kills the server (2026-09-16)
+
+`server.js` states that background jobs must never stop the API from
+serving, because none of them sit on a request path. That was not actually
+true: Bull surfaces Redis problems as an `error` event on the queue, and
+with no listener Node treats it as unhandled and exits. The hosted Redis hit
+its connection cap mid-session and took the whole server down — not
+hypothetically, it happened.
+
+All four queues are now built by `jobs/queue.js`, which attaches `error` and
+`failed` handlers. **Only `err.message` is logged, never the error object**:
+an ioredis auth failure carries the failed command in its payload, and for
+AUTH that means the Redis password. The crash had already written the
+credential into a log file once.
+
+Worth knowing: each Bull queue opens several Redis connections, so four
+queues per running server adds up fast on a free tier. Crashed `nodemon`
+instances hold theirs until they time out — if Redis starts refusing
+connections, look for stray node processes before blaming the plan.
+
 ---
 
 ## Next up
@@ -1230,10 +1288,11 @@ both apps is built.** No stubs remain in `/admin`. What is left:
    change to the ban rules, the stats aggregations or the hire clock has
    nothing watching it. The verification scripts written for each feature
    are throwaway; turning them into a suite is the obvious next move.
-4. **Deposits are a number, not a mechanism.** A rental's
-   `securityDeposit` is displayed and agreed in the chat — nothing holds
-   it, tracks it or returns it. Marking a hire returned does not settle any
-   money. Say so before anyone assumes the platform is holding it.
+4. **Deposits still change hands in cash.** Nothing on the platform holds,
+   escrows or settles one — the UI now says so at every point (see below),
+   but if a renter never gets their deposit back the only recourse is the
+   dispute button and a moderator. That is the same as a sale going wrong,
+   and it is the honest limit of a marketplace that never touches money.
 
 ### Known, not a bug
 - **The scam-score heuristic rarely reaches the `pending` threshold (70) in

@@ -124,8 +124,12 @@ lines. It exists in **both** copies, client included, to keep them identical.
   category from students, and nothing in this UI sets it.
 - **Chat messages cannot be reported yet.** `ReportModal` and this queue
   both handle `targetType: 'message'`; no client surface offers it.
-- **`moderator.demo@pec.edu.in` exists** with a known password, for signing
-  in during development. Delete it or change the password before deploying.
+- **`moderator.demo@pec.edu.in` exists** for signing in during development —
+  it is the only way to exercise the moderator role, which is narrower than
+  admin. Its password was rotated on 2026-09-16 and is not written down
+  anywhere in this repo. Run `npm run preflight` in `/server` before any
+  deploy; it checks every account against known passwords, among other
+  things.
 - **Activity days are bucketed in `Asia/Kolkata`** (`REPORT_TZ` in
   `admin.controller.js`), not UTC — one campus, one timezone. UTC would file
   everything before 5:30 a.m. under the previous day.

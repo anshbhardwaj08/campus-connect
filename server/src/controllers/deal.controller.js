@@ -70,18 +70,24 @@ const applyConfirmation = async (deal, side) => {
     // A hire is not finished at the handover, so saying "all done, leave a
     // review" would be wrong — it has only just started.
     const due = deal.dueAt ? formatDay(deal.dueAt) : null;
+    // Said from each side's own point of view, because a deposit is only
+    // meaningful as "yours, held by them" or "theirs, held by you".
+    const held = deal.securityDeposit
+      ? ` ₹${deal.securityDeposit} deposit`
+      : '';
+
     await Promise.all([
       notify(deal.buyerId, {
         title: due ? 'The hire has started' : 'Deal closed',
         message: due
-          ? `Due back to ${sellerName} on ${due}.`
+          ? `Due back to ${sellerName} on ${due}.${held ? ` They are holding your${held}.` : ''}`
           : `All done with ${sellerName}. Leave them a review.`,
         link: '/deals',
       }),
       notify(deal.sellerId, {
         title: due ? 'The hire has started' : 'Deal closed',
         message: due
-          ? `${buyerName} has it until ${due}.`
+          ? `${buyerName} has it until ${due}.${held ? ` You are holding their${held}.` : ''}`
           : `All done with ${buyerName}. Leave them a review.`,
         link: '/deals',
       }),
@@ -148,7 +154,7 @@ const createFromConversation = catchAsync(async (req, res) => {
 
   const conversation = await Conversation.findById(conversationId).populate(
     'listingId',
-    'sellerId listingType rentPeriod'
+    'sellerId listingType rentPeriod securityDeposit'
   );
   if (!conversation) throw new ApiError(404, 'Conversation not found');
 
@@ -170,12 +176,14 @@ const createFromConversation = catchAsync(async (req, res) => {
   // whether it is late. The count is in the listing's own period, so "2" on
   // a per-week listing is a fortnight.
   let rentalDays;
+  let securityDeposit;
   if (listing.listingType === 'rent') {
     const periods = Number(rentalPeriods);
     if (!Number.isInteger(periods) || periods < 1 || periods > 52) {
       throw new ApiError(400, 'Say how long the hire is for');
     }
     rentalDays = periods * (PERIOD_DAYS[listing.rentPeriod] || 1);
+    securityDeposit = listing.securityDeposit || 0;
   }
 
   // Idempotent: accepting twice should land on the same deal, not open a
@@ -196,6 +204,7 @@ const createFromConversation = catchAsync(async (req, res) => {
       finalPrice,
       meetupLocation,
       rentalDays,
+      securityDeposit,
       verifyCode: generateDealCode(),
     });
   }
@@ -311,11 +320,18 @@ const markReturned = catchAsync(async (req, res) => {
   );
 
   const late = deal.dueAt < deal.returnedAt;
+  // The renter is the one owed money back, so they are told to expect it —
+  // the owner is told to hand it over, on the page, next to the button.
+  const deposit = deal.securityDeposit
+    ? ` Ask ${req.user.name} for your ₹${deal.securityDeposit} deposit back.`
+    : '';
+
   await notify(deal.buyerId, {
     title: 'Returned — that hire is settled',
-    message: late
-      ? `${req.user.name} has it back. It came back after the ${formatDay(deal.dueAt)} date.`
-      : `${req.user.name} has it back. Leave them a review.`,
+    message:
+      (late
+        ? `${req.user.name} has it back. It came back after the ${formatDay(deal.dueAt)} date.`
+        : `${req.user.name} has it back.`) + (deposit || ' Leave them a review.'),
     link: '/deals',
   });
 

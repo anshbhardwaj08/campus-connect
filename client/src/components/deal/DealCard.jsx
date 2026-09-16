@@ -51,6 +51,7 @@ export default function DealCard({
     sellerConfirmed,
     createdAt,
     rentalDays,
+    securityDeposit,
     dueAt,
     returnedAt,
   } = deal;
@@ -107,9 +108,19 @@ export default function DealCard({
             <p className="meta mt-0.5">Agreed {timeAgo(createdAt)}</p>
           </div>
 
-          <span className="shrink-0 font-display text-[26px] leading-none text-ink">
-            {formatPrice(finalPrice)}
-          </span>
+          <div className="shrink-0 text-right">
+            <span className="font-display text-[26px] leading-none text-ink">
+              {formatPrice(finalPrice)}
+            </span>
+            {/* The deposit is a second sum changing hands at the same gate.
+                Left off this card it gets forgotten at the meetup, which is
+                the one moment it has to be remembered. */}
+            {isHire && securityDeposit > 0 && (
+              <p className="meta mt-0.5 whitespace-nowrap">
+                + {formatPrice(securityDeposit)} deposit
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -208,10 +219,17 @@ export default function DealCard({
             that has not happened yet. */}
         {done && out && (
           <div className="flex flex-col gap-2.5">
+            {/* Said plainly on both sides, because the deposit is the part
+                people assume a marketplace is holding for them. It is not —
+                it is cash one student gave another. */}
             <p className="meta border-l-[3px] border-ink pl-3 leading-relaxed">
               {isSeller
                 ? 'They have it. Mark it returned when you get it back and it goes live again.'
                 : 'You have it. Hand it back by the date above.'}
+              {securityDeposit > 0 &&
+                (isSeller
+                  ? ` You are holding ${formatPrice(securityDeposit)} of theirs — give it back when they return it. College OLX is not holding it for you.`
+                  : ` They are holding ${formatPrice(securityDeposit)} of yours — ask for it back when you hand the item over.`)}
             </p>
 
             {isSeller && (
@@ -233,7 +251,11 @@ export default function DealCard({
         {done && !out && (
           <div className="flex flex-col gap-2.5">
             <p className="meta border-l-[3px] border-ink pl-3 leading-relaxed">
-              Closed. A review is the only thing that moves their trust score.
+              {returnedAt && securityDeposit > 0
+                ? isSeller
+                  ? `Back with you. Give them their ${formatPrice(securityDeposit)} deposit if you have not already.`
+                  : `Handed back. Ask for your ${formatPrice(securityDeposit)} deposit if you have not had it.`
+                : 'Closed. A review is the only thing that moves their trust score.'}
             </p>
 
             {reviewed ? (

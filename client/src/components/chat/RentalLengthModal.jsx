@@ -65,6 +65,9 @@ export default function RentalLengthModal({ isOpen, amount, listing, busy, onClo
             <p className="meta mt-1 leading-relaxed">
               The clock starts when you hand it over, not now. Both of you get a reminder the
               day before.
+              {listing?.securityDeposit
+                ? ` Collect the ${formatPrice(listing.securityDeposit)} deposit at the gate — it is yours to hold and yours to give back.`
+                : ''}
             </p>
           </div>
         )}
