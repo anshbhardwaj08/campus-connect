@@ -6,6 +6,7 @@
 //   slabIn     — price slabs scale in from the right, after the wipe
 //   stampIn    — caption boxes land like a rubber stamp
 //   lineIn     — Bangers headline lines snap in off the left
+//   drawIn     — plotted lines ink themselves in, left to right
 //
 // Everything is wrapped so that `prefers-reduced-motion: reduce` lands on the
 // final state instantly instead of playing. Never call gsap.from() directly in
@@ -108,6 +109,30 @@ export function lineIn(targets, vars = {}) {
       duration: 0.62,
       ease: 'power4.out',
       stagger: 0.09,
+      ...vars,
+    }
+  );
+}
+
+// Plotted lines ink themselves onto the page from left to right.
+// The target must carry pathLength="1" so dash units are fractions of the
+// path's own length and one duration suits every line whatever its shape.
+export function drawIn(targets, vars = {}) {
+  if (!targets) return null;
+
+  if (prefersReducedMotion()) {
+    gsap.set(targets, { strokeDashoffset: 0 });
+    return null;
+  }
+
+  return gsap.fromTo(
+    targets,
+    { strokeDashoffset: 1 },
+    {
+      strokeDashoffset: 0,
+      duration: 0.9,
+      ease: EASE,
+      stagger: 0.12,
       ...vars,
     }
   );

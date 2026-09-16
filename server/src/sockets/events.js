@@ -2,7 +2,9 @@ const jwt = require('jsonwebtoken');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
-const { setSocketIO, createNotification } = require('../services/notification.service');
+const { createNotification } = require('../services/notification.service');
+const { setSocketIO } = require('../services/socketRegistry');
+const { ADMIN_ROOM } = require('../services/adminFeed.service');
 
 // Everyone in the thread except the sender. A socket only receives
 // `chat:message` if it has joined the conversation room, which means it is
@@ -35,7 +37,7 @@ const setupSocket = (io) => {
   setSocketIO(io);
 
   // Authenticate the socket connection using the access token cookie/handshake auth
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     try {
       const token =
         socket.handshake.auth?.token ||
@@ -47,7 +49,18 @@ const setupSocket = (io) => {
       if (!token) return next(new Error('Authentication required'));
 
       const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+
+      // The token carries only a userId, and a socket authenticates once and
+      // then lives on its own — so the role and the block check have to be
+      // read here. Without the block check a suspended account keeps a live
+      // socket and can go on sending chat messages through it, never
+      // touching the HTTP middleware that would refuse them.
+      const user = await User.findById(decoded.userId).select('role isBlocked').lean();
+      if (!user) return next(new Error('Authentication required'));
+      if (user.isBlocked) return next(new Error('Account suspended'));
+
       socket.userId = decoded.userId;
+      socket.userRole = user.role;
       next();
     } catch (err) {
       next(new Error('Invalid or expired token'));
@@ -59,6 +72,12 @@ const setupSocket = (io) => {
 
     // Personal room for direct notifications
     socket.join(String(socket.userId));
+
+    // The dashboard's live feed. Students are never in this room, so
+    // nothing emitted to it can leak to the marketplace side.
+    if (socket.userRole === 'admin' || socket.userRole === 'moderator') {
+      socket.join(ADMIN_ROOM);
+    }
 
     socket.on('conversation:join', (conversationId) => {
       socket.join(`conversation:${conversationId}`);
@@ -144,8 +163,8 @@ const setupSocket = (io) => {
     });
 
     socket.on('admin:stats', () => {
-      if (socket.rooms.has('admins')) {
-        io.to('admins').emit('admin:stats', { requestedBy: socket.userId });
+      if (socket.rooms.has(ADMIN_ROOM)) {
+        io.to(ADMIN_ROOM).emit('admin:stats', { requestedBy: socket.userId });
       }
     });
 

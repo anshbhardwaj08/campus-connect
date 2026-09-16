@@ -46,6 +46,33 @@ export default function FilterPanel({ filters, onChange, onReset, activeCount = 
       </div>
 
       <div className="flex flex-col gap-3.5">
+        {/* First filter in the rail, because "I only want to rent" rules out
+            most of the page and every other filter is narrower than that. */}
+        <div>
+          <p className="label-xs mb-1.5">Buying or renting</p>
+          <div className="flex border-2 border-ink">
+            {[
+              { value: '', label: 'Both' },
+              { value: 'sale', label: 'To buy' },
+              { value: 'rent', label: 'To rent' },
+            ].map((opt) => (
+              <button
+                key={opt.value || 'any'}
+                type="button"
+                aria-pressed={(filters.listingType || '') === opt.value}
+                onClick={() => onChange('listingType', opt.value)}
+                className={`min-h-[38px] flex-1 px-2 text-[11px] font-extrabold uppercase tracking-[.05em] transition-colors ${
+                  (filters.listingType || '') === opt.value
+                    ? 'bg-ink text-paper-3'
+                    : 'bg-paper-3 text-ink hover:bg-paper-2'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <Select
           label="Category"
           placeholder="Everything"
@@ -110,6 +137,8 @@ export function ActiveFilterChips({ filters, onClear }) {
     const cat = categories.find((c) => c.slug === filters.category);
     chips.push(['category', cat?.name || filters.category]);
   }
+  if (filters.listingType === 'rent') chips.push(['listingType', 'to rent']);
+  if (filters.listingType === 'sale') chips.push(['listingType', 'to buy']);
   if (filters.condition) chips.push(['condition', CONDITION_LABEL[filters.condition] || filters.condition]);
   if (filters.minPrice) chips.push(['minPrice', `from ₹${filters.minPrice}`]);
   if (filters.maxPrice) chips.push(['maxPrice', `up to ₹${filters.maxPrice}`]);

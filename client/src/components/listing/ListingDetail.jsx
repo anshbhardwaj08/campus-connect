@@ -6,7 +6,7 @@
 // item is genuinely free, and the caption boxes stay paper.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, MapPin, Eye, Clock, Heart, Share2 } from 'lucide-react';
+import { Package, MapPin, Eye, Clock, Heart, Share2, Wallet } from 'lucide-react';
 
 import Panel from '../ui/Panel';
 import Badge from '../ui/Badge';
@@ -14,7 +14,7 @@ import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
 import CaptionBox from '../ui/CaptionBox';
 import ReportButton from '../report/ReportButton';
-import formatPrice from '../../utils/formatPrice';
+import formatPrice, { formatRate, PERIOD_LABEL } from '../../utils/formatPrice';
 import { timeAgo } from '../../utils/timeAgo';
 
 const CONDITION_LABEL = {
@@ -24,7 +24,14 @@ const CONDITION_LABEL = {
   'for-parts': 'For parts',
 };
 
-export default function ListingDetail({ listing, isOwner = false, onSave, saved = false }) {
+export default function ListingDetail({
+  listing,
+  isOwner = false,
+  onSave,
+  saved = false,
+  onRelist,
+  relisting = false,
+}) {
   const [activeImage, setActiveImage] = useState(0);
 
   const {
@@ -33,6 +40,9 @@ export default function ListingDetail({ listing, isOwner = false, onSave, saved 
     price,
     isFree,
     isNegotiable,
+    listingType,
+    rentPeriod,
+    securityDeposit,
     condition,
     category,
     pickupLocation,
@@ -44,6 +54,10 @@ export default function ListingDetail({ listing, isOwner = false, onSave, saved 
   } = listing;
 
   const photo = images[activeImage];
+  const isRent = listingType === 'rent';
+  // A rented item is out on loan, not gone — the owner gets it back and puts
+  // it up again, which is why this is the one status with a way out of it.
+  const isOut = status === 'rented';
 
   return (
     <div className="flex flex-col gap-[9px]">
@@ -60,12 +74,16 @@ export default function ListingDetail({ listing, isOwner = false, onSave, saved 
 
               {status && status !== 'active' && (
                 <CaptionBox corner="tl" tone="crimson">
-                  {status === 'sold' ? 'Sold — this one is gone' : status}
+                  {status === 'sold'
+                    ? 'Sold — this one is gone'
+                    : status === 'rented'
+                      ? 'Out on hire — back later'
+                      : status}
                 </CaptionBox>
               )}
 
               <span className={`slab ${isFree ? 'slab--free' : ''}`}>
-                {isFree ? 'FREE' : formatPrice(price)}
+                {isFree ? 'FREE' : formatRate(price, isRent ? rentPeriod : null)}
               </span>
             </div>
           </Panel>
@@ -102,31 +120,66 @@ export default function ListingDetail({ listing, isOwner = false, onSave, saved 
 
               <p className="mt-2 font-display text-[38px] leading-none tracking-[.02em] text-ink">
                 {isFree ? 'FREE' : formatPrice(price)}
+                {!isFree && isRent && rentPeriod && (
+                  <span className="ml-1 text-[20px] tracking-[.03em] text-steel">
+                    / {PERIOD_LABEL[rentPeriod] || rentPeriod}
+                  </span>
+                )}
               </p>
 
               <div className="mt-3 flex flex-wrap gap-1.5">
+                {isRent && <Badge tone="ink">For rent</Badge>}
                 {condition && <Badge tone="paper">{CONDITION_LABEL[condition] || condition}</Badge>}
                 {category && <Badge tone="outline">{category}</Badge>}
                 {isNegotiable && !isFree && <Badge tone="outline">Open to offers</Badge>}
               </div>
 
               <dl className="mt-4 flex flex-col gap-2 border-t-2 border-ink/10 pt-3">
-                {pickupLocation && <Fact icon={MapPin} label="Pickup" value={pickupLocation} />}
+                {isRent && (
+                  <Fact
+                    icon={Wallet}
+                    label="Deposit"
+                    value={securityDeposit ? formatPrice(securityDeposit) : 'None'}
+                  />
+                )}
+                {pickupLocation && (
+                  <Fact icon={MapPin} label={isRent ? 'Handover' : 'Pickup'} value={pickupLocation} />
+                )}
                 <Fact icon={Clock} label="Listed" value={timeAgo(createdAt)} />
                 <Fact icon={Eye} label="Views" value={viewCount ?? 0} />
               </dl>
 
+              {isRent && (
+                <p className="meta mt-3 border-l-[3px] border-ink/20 pl-2.5 leading-relaxed">
+                  Agree how long you need it for in the chat. The deposit comes back when
+                  the owner does.
+                </p>
+              )}
+
               <div className="mt-auto flex flex-col gap-2.5 pt-5">
                 {isOwner ? (
-                  <Link to={`/listings/${listing._id}/edit`} className="block">
-                    <Button variant="primary" size="lg" className="w-full">
-                      Edit this panel
-                    </Button>
-                  </Link>
+                  <>
+                    {isOut && (
+                      <Button
+                        variant="primary"
+                        size="lg"
+                        className="w-full"
+                        loading={relisting}
+                        onClick={onRelist}
+                      >
+                        Got it back — list it again
+                      </Button>
+                    )}
+                    <Link to={`/listings/${listing._id}/edit`} className="block">
+                      <Button variant={isOut ? 'paper' : 'primary'} size="lg" className="w-full">
+                        Edit this panel
+                      </Button>
+                    </Link>
+                  </>
                 ) : (
                   <Link to={`/chat?listing=${listing._id}`} className="block">
                     <Button variant="primary" size="lg" className="w-full">
-                      Message the seller
+                      {isRent ? 'Message the owner' : 'Message the seller'}
                     </Button>
                   </Link>
                 )}

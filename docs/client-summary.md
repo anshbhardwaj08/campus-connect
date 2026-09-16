@@ -9,12 +9,25 @@ verified against the live API.
   ForgotPassword / ResetPassword (single-use emailed link, one hour; resetting
   signs you out everywhere else)
 - **Home** — hero panel, category rail with real counts, listing feed
-- **Browse** — search, category/condition/price filters, 3 sort orders,
-  pagination. All filter state in the URL
+- **Browse** — search, a buying/renting switch, category/condition/price
+  filters, 3 sort orders, pagination. All filter state in the URL
 - **Listings** — detail page, post, edit. Photos via Cloudinary
+- **Renting** — a listing is either **for sale or for rent**, never both. A
+  rental carries a rate (`price`) per `rentPeriod` (day/week/month) and an
+  optional `securityDeposit`. The sell form switches between the two; the
+  card and detail page print `₹120 / day`. A closed hire marks the item
+  **`rented`**, not sold
+- **The hire clock** — the owner says how long when they accept, the clock
+  starts at handover (`dueAt`), and the deal card shows the due date or how
+  overdue it is. A daily job nudges the renter the day before and both sides
+  once it is late. "They returned it" ends the hire and puts the listing
+  back on the page in one action
 - **Chat** — inbox, live messages over Socket.io, offers, accept-offer.
   Threads attach to a listing **or** a community post (`subject`)
-- **Deals** — verify-code handshake, confirmations, review after closing
+- **Deals** — verify-code handshake, confirmations, review after closing.
+  **Every step notifies whoever has to act next** — the offer being
+  accepted, the code being verified, one side confirming, and the close —
+  so a deal cannot sit waiting on someone who never found out
 - **Profile** — own (panels / notifications / reviews tabs), public, settings
 - **Account menu** — avatar in the masthead: profile, panels, settings, sign out
 - **Saved** — saved listings

@@ -29,6 +29,8 @@ export default function ListingCard({ listing, index = 0 }) {
     title,
     price,
     isFree,
+    listingType,
+    rentPeriod,
     condition,
     pickupLocation,
     images,
@@ -54,7 +56,13 @@ export default function ListingCard({ listing, index = 0 }) {
             </Badge>
           )}
 
-          <PriceSlab price={isFree ? 0 : price} />
+          {listingType === 'rent' && (
+            <Badge tone="ink" className="absolute right-0 top-0 !border-t-0 !border-r-0">
+              For rent
+            </Badge>
+          )}
+
+          <PriceSlab price={isFree ? 0 : price} period={listingType === 'rent' ? rentPeriod : null} />
         </div>
 
         <div className="flex flex-1 flex-col gap-2 pt-2.5">

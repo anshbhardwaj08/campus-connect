@@ -3,6 +3,7 @@ const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const { paginate, buildPagination } = require('../utils/paginate');
+const { emitAdminActivity } = require('../services/adminFeed.service');
 
 // POST /reports
 // Body is allow-listed by createReportSchema — status, adminNote and
@@ -28,6 +29,9 @@ const submitReport = catchAsync(async (req, res) => {
   }
 
   const report = await Report.create({ ...req.body, reporterId: req.user._id });
+
+  emitAdminActivity('reports');
+
   return res.status(201).json(new ApiResponse(201, { report }, 'Report submitted'));
 });
 

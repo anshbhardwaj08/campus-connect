@@ -10,6 +10,8 @@ const router = express.Router();
 router.use(verifyAccessToken, requireRole('admin', 'moderator'));
 
 router.get('/stats', adminController.getDashboardStats);
+router.get('/stats/activity', adminController.getActivitySeries);
+router.get('/stats/categories', adminController.getCategoryBreakdown);
 
 router.get('/users', adminController.getUsers);
 router.get('/users/:id', adminController.getUserById);

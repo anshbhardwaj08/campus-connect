@@ -22,6 +22,98 @@ const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const { paginate, buildPagination } = require('../utils/paginate');
 
+// The campus this serves sits in one timezone, so days are bucketed there
+// rather than in UTC. A listing posted at 1 a.m. belongs to that morning;
+// UTC bucketing would file it under the previous day and make the ticker's
+// "today" wrong for the first five and a half hours of every day.
+// (Safe to step by fixed 24h below because this zone has no DST.)
+const REPORT_TZ = 'Asia/Kolkata';
+const DAY_MS = 86400000;
+
+const dayKey = (date) => new Intl.DateTimeFormat('en-CA', { timeZone: REPORT_TZ }).format(date);
+
+const countByDay = (Model, dateField, since, match = {}) =>
+  Model.aggregate([
+    { $match: { ...match, [dateField]: { $gte: since } } },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: `$${dateField}`, timezone: REPORT_TZ } },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+const tally = (rows) => new Map(rows.map((r) => [r._id, r.count]));
+
+// GET /admin/stats/activity?days=30
+//
+// Every day in the window is returned even when nothing happened. A series
+// that omits quiet days draws a straight line across them, which reads as
+// steady activity rather than as silence.
+const getActivitySeries = catchAsync(async (req, res) => {
+  const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 7), 90);
+
+  // Reach back one extra day so a bucket is never half-filled by the window
+  // edge; keys outside the rendered range are dropped on merge.
+  const since = new Date(Date.now() - (days + 1) * DAY_MS);
+
+  const [listings, deals, users, reports] = await Promise.all([
+    countByDay(Listing, 'createdAt', since),
+    // Deal has no completedAt: nothing mutates a deal once it is completed,
+    // so updatedAt is the moment it closed.
+    countByDay(Deal, 'updatedAt', since, { status: 'completed' }),
+    countByDay(User, 'createdAt', since),
+    countByDay(Report, 'createdAt', since),
+  ]);
+
+  const byDay = {
+    listings: tally(listings),
+    deals: tally(deals),
+    users: tally(users),
+    reports: tally(reports),
+  };
+
+  const now = Date.now();
+  const series = [];
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const date = dayKey(new Date(now - i * DAY_MS));
+    series.push({
+      date,
+      listings: byDay.listings.get(date) || 0,
+      deals: byDay.deals.get(date) || 0,
+      users: byDay.users.get(date) || 0,
+      reports: byDay.reports.get(date) || 0,
+    });
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { days, timezone: REPORT_TZ, series }, 'Activity series fetched'));
+});
+
+// GET /admin/stats/categories
+const getCategoryBreakdown = catchAsync(async (req, res) => {
+  const grouped = await Listing.aggregate([
+    { $match: { status: 'active' } },
+    { $group: { _id: '$category', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+  ]);
+
+  const categories = await Category.find({}, 'name slug').lean();
+  const nameBySlug = new Map(categories.map((c) => [c.slug, c.name]));
+
+  // A listing stores its category as a plain slug string, so one can outlive
+  // the Category row it was filed under. Showing the bare slug tells a
+  // moderator more than quietly dropping those listings from the chart.
+  const data = grouped.map((g) => ({
+    slug: g._id,
+    name: nameBySlug.get(g._id) || g._id,
+    count: g.count,
+  }));
+
+  return res.status(200).json(new ApiResponse(200, data, 'Category breakdown fetched'));
+});
+
 // GET /admin/stats
 const getDashboardStats = catchAsync(async (req, res) => {
   const [totalUsers, totalListings, totalDeals, openReports, activeListings] = await Promise.all([
@@ -413,6 +505,8 @@ const createCategory = catchAsync(async (req, res) => {
 
 module.exports = {
   getDashboardStats,
+  getActivitySeries,
+  getCategoryBreakdown,
   getUsers,
   getUserById,
   deleteUser,

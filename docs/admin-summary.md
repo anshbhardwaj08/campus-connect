@@ -9,8 +9,21 @@ A student's session is valid but is refused here.
 
 ## Screens
 
-- **Dashboard** — five real counts from `GET /admin/stats`, and a shortcut
-  into the pending queue. No chart yet.
+- **Dashboard** — a live strip of today's figures, five counts from
+  `GET /admin/stats`, a 7/30/90-day activity chart, a breakdown of what is
+  on sale by category, and a shortcut into the pending queue. Every number
+  is a real query; none of it is sample data.
+
+  The strip is **genuinely live**: admin and moderator sockets join an
+  `admins` room, and a listing posted, a deal closing, a report filed or an
+  account registered ticks it without a reload. It seeds from today's bucket
+  of the activity series, because a socket only knows what happened after it
+  connected — with the socket down it says "Today so far" rather than
+  pretending to watch.
+
+  The tick updates the **cached series**, which is what the chart draws, so
+  the two cannot disagree; the KPI cards and the donut are refetched instead,
+  since a tick says what happened, not which category it belongs to.
 - **Pending listings** — the queue the panel exists for. Everything here was
   flagged `scamScore >= 70` at creation and is invisible to everyone,
   including its seller, until approved or rejected. Reject asks for a reason
@@ -70,11 +83,25 @@ compile against. Columns are plain
 `{ key, header, render, sortable, sortValue }`; search and pagination are
 the caller's, since every list endpoint paginates server-side.
 
+**The charts use no chart library either, and `recharts` was removed.** Its
+palette, rounded tooltips and own animation engine are all things this
+system forbids, so every default would have been overridden. `ActivityChart`
+is a polyline through scaled points; `CategoryDonut` is arc paths. Since
+crimson is the only accent, donut slices are told apart the way a printed
+comic does it — solid plates from the palette, then halftone screens for the
+tail — and legend swatches take each slice's own fill so the two cannot
+drift apart.
+
+`drawIn` (stroke-dashoffset) was added to `lib/motion.js` for the plotted
+lines. It exists in **both** copies, client included, to keep them identical.
+
 ## Backend, gated behind `requireRole('admin', 'moderator')`
 
 `/api/v1/admin/*`:
 
 - `GET /stats`
+- `GET /stats/activity` (optional `days`, 7–90, default 30)
+- `GET /stats/categories`
 - `GET /users`, `GET /users/:id`, `PATCH /users/:id/ban`, `PATCH /users/:id/unban`,
   `DELETE /users/:id` *(admin only)*
 - `GET /listings` (optional `status`, `sellerId`), `PATCH /listings/:id/approve`,
@@ -99,6 +126,15 @@ the caller's, since every list endpoint paginates server-side.
   both handle `targetType: 'message'`; no client surface offers it.
 - **`moderator.demo@pec.edu.in` exists** with a known password, for signing
   in during development. Delete it or change the password before deploying.
+- **Activity days are bucketed in `Asia/Kolkata`** (`REPORT_TZ` in
+  `admin.controller.js`), not UTC — one campus, one timezone. UTC would file
+  everything before 5:30 a.m. under the previous day.
+- **"Deals closed" counts by `updatedAt`.** `Deal` has no `completedAt`;
+  nothing mutates a completed deal, so `updatedAt` is when it closed. That
+  stops being true the day deals become editable after the fact.
+- **The donut counts every active listing**, including those withheld from
+  students because their seller is suspended — consistent with the "Active
+  listings" KPI beside it, which has always counted the same way.
 
 ## Testing against this database
 

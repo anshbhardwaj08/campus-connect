@@ -6,7 +6,7 @@ A running handoff file. **Read this first when starting a new session**, then
 Keep it current: when a chunk of work lands, move it from "Next up" to "Done"
 and add anything a cold reader could not infer from the code.
 
-Last updated: 2026-09-16 (client complete; admin panel complete bar the dashboard chart)
+Last updated: 2026-09-16 (both apps complete; renting, the hire clock and deal notifications added)
 
 ---
 
@@ -23,7 +23,7 @@ Comic Noir system.
 |---|---|---|
 | `/server` | 5000 | Complete — every route the two frontends use is built and role-gated |
 | `/client` | 5173 | Comic Noir throughout — every student-facing screen is built |
-| `/admin` | 5174 | Every sidebar page is built. Only the dashboard chart/ticker (`RevenueChart`, `CategoryDonut`, `LiveStatsTicker`) is still a stub |
+| `/admin` | 5174 | Complete — every sidebar page is built, dashboard charts and live ticker included |
 
 The database holds **real accounts and real content alongside demo data** —
 see "Demo content lives in the database on purpose" below before writing any
@@ -1003,22 +1003,237 @@ through both UIs (the ban modal, the reason shown back to the moderator and
 to the student, unban clearing it, and the mid-session redirect still
 working). All test content removed afterwards.
 
+### The dashboard has real figures, and they move (2026-09-16)
+
+The last three stubs in `/admin` are gone. Everything on the dashboard is a
+real query against the database; nothing is sample data.
+
+**Two new endpoints.** `GET /admin/stats/activity?days=30` (clamped 7–90)
+returns one bucket per day of listings posted, deals closed, people joined
+and reports filed. `GET /admin/stats/categories` returns active listings
+grouped by category. Both are admin-or-moderator like the rest of `/admin`.
+
+Three decisions inside the series worth knowing:
+
+- **Empty days are returned as zeros, not omitted.** A series that skips
+  quiet days draws a straight line across them, which reads as steady
+  activity rather than as silence.
+- **Days are bucketed in `Asia/Kolkata`, not UTC.** One campus, one
+  timezone; UTC bucketing would file everything before 5:30 a.m. under the
+  previous day and make "today" wrong every morning.
+- **Deals are counted by `updatedAt`.** `Deal` has no `completedAt`, and
+  nothing mutates a deal once it is completed, so `updatedAt` is the moment
+  it closed. Add a real field if deals ever become editable after the fact.
+
+**The ticker is genuinely live, not polled.** Admin and moderator sockets
+now join an `admins` room on connect, and `emitAdminActivity` fires from the
+four places that matter: a listing created, a deal completing (both confirm
+paths), a report filed, an account registered. Emits are fire-and-forget —
+a dropped tick is one stale figure on one screen and must never fail the
+student's request that caused it.
+
+The tick is folded into the **cached activity series**, not into a counter
+of its own, so the chart and the ticker read the same number and cannot
+drift apart; a refetch then silently corrects anything missed while
+disconnected. A separate tally would have to be reconciled against every
+refetch and would double-count the moment it got that wrong. The KPI cards
+and the donut are invalidated on a tick rather than patched, because a tick
+says *what* happened, not which category it was filed under.
+
+The strip seeds from today's bucket. Without that it would open every
+afternoon claiming nothing had happened all day, since a socket only knows
+what happened after it connected. When the socket is down it says "Today so
+far" instead of "Live today" rather than implying it is watching.
+
+**Charts are hand-rolled SVG; `recharts` was removed.** It was in
+`package.json` and the original stubs imported it, but its palette, its
+rounded tooltips and its own animation engine are all things this system
+forbids, so every default would have been overridden. A line chart is a
+polyline through scaled points. The donut tells slices apart the way a
+printed comic does — solid plates from the palette, then halftone screens
+for the tail — because there is only one accent colour to spend. Legend
+swatches take the slice's own fill, pattern included, so they cannot drift.
+
+`RevenueChart` was **renamed to `ActivityChart`**: there is no revenue in
+this product, and a component named for money that plots listing counts is
+a lie waiting to mislead someone.
+
+**Two fixes found by testing, not by reading:**
+
+- `useAdminSocket` returned a **ref**, so a consumer read `null` on mount
+  and never re-rendered when the socket arrived. It holds state now.
+- The draw-on animation re-ran on **every background refetch**, blanking the
+  line for the length of its delay each time — and a live tick refreshes
+  that data every time anything is posted. It now draws on first paint and
+  on a range change only.
+
+**One hole closed while in there.** Sockets authenticated once and then
+lived on their own, so a suspended account kept a live socket and could
+still send chat messages through it, never touching the HTTP middleware
+that would have refused them. The socket handshake now reads `isBlocked`
+and refuses. This is part of the ban work above, which had claimed more
+than it delivered.
+
+`drawIn` was added to the motion vocabulary in **both** copies of
+`lib/motion.js`, keeping them byte-identical as the sync rule requires.
+
+Verified in a real browser: 21 checks on the rendered dashboard (both charts
+drawn, ink and crimson only, halftone fills present, 7/30/90 switching and
+refetching, hover readout, legend matching the slices, no console errors
+once signed in), run three times to confirm it was stable and not lucky,
+plus 12 live checks — a report, a registration and a listing created through
+the API while the dashboard sat open, each moving the right counter and
+leaving the others alone, with the ink line rising on the listing. Test
+artefacts were deleted by id afterwards; the demo content is untouched.
+
+### A deal now tells the other person it is their turn (2026-09-16)
+
+Accepting an offer wrote the deal, flipped `conversation.dealStatus` and
+emitted `deal:agreed` **to the conversation room** — which means the buyer
+only found out if they happened to have that thread open. Nothing else in
+the handshake said anything either, so a deal could sit half-confirmed with
+neither side knowing it was waiting on them.
+
+Every step now notifies whoever has to act next, through the existing
+`createNotification` (which also pushes over the socket, so it arrives live):
+
+- **Offer accepted** → the buyer, naming the price and what to do next. Says
+  "to rent" when the listing is a rental.
+- **Code verified** at the meetup → the other participant.
+- **One side confirms** → the other, to confirm from their end.
+- **Both confirmed** → both, pointed at leaving a review.
+
+Two details worth keeping: the accept notification is guarded on the deal
+being **newly created**, because that endpoint is deliberately idempotent
+and a seller pressing accept twice must not notify twice. And none of these
+are awaited into the response or allowed to throw — failing to tell someone
+their offer was accepted is bad, failing their whole request over it is
+worse.
+
+`buyerConfirm` and `sellerConfirm` were near-identical and were about to
+gain another dozen duplicated lines, so the completion side effects live in
+one `applyConfirmation` now and cannot drift apart.
+
+### Renting (2026-09-16)
+
+Students wanted to hire things, not only buy them. A listing is now either
+**for sale or for rent** — deliberately not both: a listing that was either
+would have to carry two prices and answer "which one is this deal for?" at
+every step of the handshake.
+
+- `listingType` ('sale' | 'rent'), `rentPeriod` ('day' | 'week' | 'month')
+  and `securityDeposit` on `Listing`. **`price` doubles as the rate**, which
+  keeps sorting, price filters, the scam score and the deal's `finalPrice`
+  all on one field instead of forking every one of them.
+- `rentPeriod` is **required on a rental and forbidden on a sale**, so a sale
+  listing can never carry a stray "per month" that the UI would then print.
+- A new **`rented`** status. A completed hire marks the item `rented`, not
+  `sold` — a rental comes back, and marking it sold would take it off the
+  page for good. The owner puts it back with the existing `relist` endpoint,
+  which had never been wired to anything in `/client` until now.
+- `GET /listings?listingType=sale|rent`. Asking for sales matches
+  `{ $ne: 'rent' }` rather than `'sale'`, because every listing created
+  before this feature existed has no `listingType` at all.
+
+On the client: a sale/rent switch in the sell form (with the rate, period and
+deposit fields appearing with it), a "For rent" flag and `₹120/DAY` slab on
+the card, deposit and handover on the detail page, and a buying/renting
+filter at the top of the browse rail — first, because "I only want to rent"
+rules out more of the page than any other filter. `formatRate` lives in
+`utils/formatPrice.js` so the slab, card and detail page cannot word a rate
+differently. The post page's headline follows the switch too: leaving it on
+"SELL SOMETHING" above a form asking for a daily rate was the page
+contradicting itself.
+
+**`updateListingSchema` now requires `listingType`.** Left optional, an edit
+to any other field would strip a rental's period and deposit and silently
+turn it into a sale. `ListingForm` is the only caller that PATCHes a listing
+body, and it always sends it.
+
+Verified 18 checks against the API with two throwaway accounts — a rental
+created, refused without a period, found under "to rent" and absent under
+"to buy", a thread opened, the offer accepted, the buyer notified exactly
+once (and not twice on a second accept), the code verified, each
+confirmation notifying the other side, the item marked `rented` rather than
+`sold`, and relisting returning it to `active`. Then 21 more in a real
+browser across the sell form, the detail page and browse, plus the headline.
+All throwaway accounts and their content deleted afterwards.
+
+### Rentals have a clock now (2026-09-16)
+
+Renting shipped with no notion of when anything was due back. Both sides
+agreed "how long" in a chat message and nothing recorded it — no date, no
+reminder, no way to see what was late. Closing that:
+
+- **`rentalDays` is settled at accept.** The owner is asked how many periods
+  before the deal opens, counted in the listing's own period, so "2" on a
+  per-week listing is a fortnight. A hire cannot be accepted without it —
+  otherwise nothing downstream can say whether an item is late.
+- **`dueAt` is set at the handover, not at the agreement.** The clock a
+  renter has in mind starts when the thing is actually in their hands, and
+  the meetup can be days after the deal was struck.
+- **`returnedAt` and `PATCH /deals/:id/returned`** — owner-only, and the one
+  action that ends a hire: it stops the clock, puts the listing back on the
+  page and tells the renter. Done separately, the deal kept reading "out"
+  after the owner had already relisted the thing. It only reopens a listing
+  still sitting at `rented`, so a sale, a deletion or a second hire in the
+  meantime is not undone.
+- **A daily job at 9am** (`rentalDue`, same Bull pattern as the others)
+  sends one "due tomorrow" to the renter and, once overdue, one notice to
+  **both** — the renter may have forgotten, and only the owner can chase it.
+  Each is stamped on the deal so it fires once per milestone: a reminder
+  repeated every morning gets muted, and then the one that matters is muted
+  too.
+
+The logic lives in `services/rentalDue.service.js`, not the job file. The job
+constructs a Bull queue at import, which opens a Redis connection and keeps
+the process alive — that made the check impossible to run from a test without
+standing up a queue, which is how the split got found.
+
+Copy that would otherwise have lied: a completed hire says **"The hire has
+started"**, not "Deal closed"; the deal card badge reads **"Out on hire"**,
+not "Done and dusted"; and the review prompt is withheld until the item is
+actually back, since rating a deal that has not finished makes no sense.
+Overdue takes the card's single crimson hit — the caption stays paper and the
+return button goes ink, because three crimson elements in one card stop
+reading as alarm.
+
+Verified 23 checks against the API and the job (length required at accept,
+two weeks becoming 14 days, no due date before handover, the clock starting
+at handover, the job silent mid-hire, one nudge the day before to the renter
+only, not repeating on a second run, overdue reaching both sides, not
+repeating either, the renter refused the return action, the owner allowed it,
+the listing going straight back to `active`, a second return refused, and a
+returned hire dropping out of the job) plus 17 in a real browser across the
+accept prompt and the due / overdue / returned states. All throwaway accounts
+removed, then a sweep confirmed nothing was left behind — which caught two
+accounts from a run that had timed out earlier.
+
 ---
 
 ## Next up
 
-**The student-facing product loop is closed end to end.** The admin panel
-has a working shell, login and moderation queue. What is left:
+**The student-facing product loop is closed end to end, and every screen in
+both apps is built.** No stubs remain in `/admin`. What is left:
 
-1. **Admin dashboard: real chart / ticker** — `RevenueChart`, `CategoryDonut`,
-   `LiveStatsTicker` are the last stubs in `/admin`. `useAdminSocket` is
-   wired correctly (cookie session) but not called from anywhere yet.
-2. **Before deploying:** delete `moderator.demo@pec.edu.in` (or change its
+1. **Before deploying:** delete `moderator.demo@pec.edu.in` (or change its
    password) and decide what to do with the demo students and their
    listings.
-3. **Bundle size.** `/client` is ~587 kB (GSAP added ~79 kB), `/admin` is
-   ~534 kB — both flagged by the build. Worth code-splitting once either
-   app's page count grows further.
+2. **Bundle size.** `/client` is ~764 kB and `/admin` ~589 kB (measured
+   2026-09-16), both flagged by the build. `/admin` grew ~53 kB when the
+   ticker pulled `socket.io-client` into the bundle for the first time —
+   that is the cost of the strip being live rather than polled. Worth
+   code-splitting by route; the login screen alone pulls the whole app.
+3. **No tests.** Everything so far has been verified by driving a real
+   browser and then deleting the artefacts. That catches what a person
+   would see and nothing else — there is no regression suite, so the next
+   change to the ban rules, the stats aggregations or the hire clock has
+   nothing watching it. The verification scripts written for each feature
+   are throwaway; turning them into a suite is the obvious next move.
+4. **Deposits are a number, not a mechanism.** A rental's
+   `securityDeposit` is displayed and agreed in the chat — nothing holds
+   it, tracks it or returns it. Marking a hire returned does not settle any
+   money. Say so before anyone assumes the platform is holding it.
 
 ### Known, not a bug
 - **The scam-score heuristic rarely reaches the `pending` threshold (70) in

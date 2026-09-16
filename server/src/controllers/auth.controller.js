@@ -11,6 +11,7 @@ const redisClient = require('../config/redis');
 const { sendVerifyEmail, sendOTPEmail, sendPasswordResetEmail } = require('../services/email.service');
 const { sendPhoneOTP } = require('../services/sms.service');
 const { winstonLogger } = require('../middleware/logger');
+const { emitAdminActivity } = require('../services/adminFeed.service');
 
 const cookieOptions = {
   httpOnly: true,
@@ -37,6 +38,8 @@ const register = catchAsync(async (req, res) => {
     batch,
     hostel,
   });
+
+  emitAdminActivity('users');
 
   const verifyToken = jwt.sign({ userId: user._id }, process.env.JWT_ACCESS_SECRET, {
     expiresIn: '1d',

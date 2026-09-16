@@ -19,6 +19,7 @@ import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import MessageBubble from './MessageBubble';
 import ReportModal from '../report/ReportModal';
+import RentalLengthModal from './RentalLengthModal';
 import formatPrice from '../../utils/formatPrice';
 
 const SUBJECT_LABEL = {
@@ -39,6 +40,7 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
   const [offerOpen, setOfferOpen] = useState(false);
   const [offerAmount, setOfferAmount] = useState('');
   const [accepting, setAccepting] = useState(false);
+  const [pendingRental, setPendingRental] = useState(null); // amount awaiting a hire length
   const [reporting, setReporting] = useState(null); // the message being reported
   const bottomRef = useRef(null);
   const queryClient = useQueryClient();
@@ -114,17 +116,32 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
   // conversation, so neither side can be spoofed from here.
   const acceptOffer = async (amount) => {
     if (!conversationId || accepting) return;
+
+    // A hire has to have a length, or nothing can say when it is late. Ask
+    // before opening the deal rather than after, since the deal is what
+    // carries the due date.
+    if (listing?.listingType === 'rent') {
+      setPendingRental(amount);
+      return;
+    }
+
+    await openDeal(amount);
+  };
+
+  const openDeal = async (amount, rentalPeriods) => {
     setAccepting(true);
     try {
       await api.post('/deals/from-conversation', {
         conversationId,
         finalPrice: amount,
         meetupLocation: listing?.pickupLocation || '',
+        ...(rentalPeriods ? { rentalPeriods } : {}),
       });
       getSocket()?.emit('deal:agreed', { conversationId });
       queryClient.invalidateQueries({ queryKey: ['deals', 'mine'] });
       queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
       toast.success('Deal opened. Check Your deals for the code to show at the gate.');
+      setPendingRental(null);
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Could not open the deal.'));
     } finally {
@@ -270,6 +287,15 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
           </p>
         </div>
       </div>
+
+      <RentalLengthModal
+        isOpen={pendingRental !== null}
+        amount={pendingRental}
+        listing={listing}
+        busy={accepting}
+        onClose={() => setPendingRental(null)}
+        onConfirm={(periods) => openDeal(pendingRental, periods)}
+      />
 
       <ReportModal
         isOpen={Boolean(reporting)}

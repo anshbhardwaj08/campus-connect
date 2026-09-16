@@ -17,7 +17,7 @@ import FilterPanel, { ActiveFilterChips } from '../../components/search/FilterPa
 import Button from '../../components/ui/Button';
 
 const PER_PAGE = 24;
-const FILTER_KEYS = ['q', 'category', 'condition', 'minPrice', 'maxPrice'];
+const FILTER_KEYS = ['q', 'listingType', 'category', 'condition', 'minPrice', 'maxPrice'];
 
 export default function Browse() {
   const [params, setParams] = useSearchParams();
@@ -26,6 +26,7 @@ export default function Browse() {
   const filters = useMemo(
     () => ({
       q: params.get('q') || '',
+      listingType: params.get('listingType') || '',
       category: params.get('category') || '',
       condition: params.get('condition') || '',
       minPrice: params.get('minPrice') || '',

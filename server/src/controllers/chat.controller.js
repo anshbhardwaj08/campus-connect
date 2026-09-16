@@ -15,7 +15,7 @@ const getConversations = catchAsync(async (req, res) => {
   const conversations = await Conversation.find({ participants: req.user._id })
     .sort({ lastMessageAt: -1 })
     .populate('participants', 'name avatar')
-    .populate('listingId', 'title images price sellerId')
+    .populate('listingId', 'title images price sellerId listingType rentPeriod')
     .lean();
 
   // Unread counts come from here rather than being tracked on the client:
@@ -106,7 +106,7 @@ const startConversation = catchAsync(async (req, res) => {
 
   await conversation.populate([
     { path: 'participants', select: 'name avatar' },
-    { path: 'listingId', select: 'title images price sellerId' },
+    { path: 'listingId', select: 'title images price sellerId listingType rentPeriod' },
   ]);
 
   return res.status(200).json(new ApiResponse(200, { conversation }, 'Conversation ready'));

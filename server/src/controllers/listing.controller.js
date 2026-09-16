@@ -5,6 +5,7 @@ const ApiResponse = require('../utils/ApiResponse');
 const { paginate, buildPagination } = require('../utils/paginate');
 const calculateScamScore = require('../utils/scamScore');
 const { excludeBlocked } = require('../utils/blockedUsers');
+const { emitAdminActivity } = require('../services/adminFeed.service');
 
 // POST /listings
 const create = catchAsync(async (req, res) => {
@@ -18,6 +19,8 @@ const create = catchAsync(async (req, res) => {
     scamScore,
     status: scamScore >= 70 ? 'pending' : 'active',
   });
+
+  emitAdminActivity('listings');
 
   return res.status(201).json(new ApiResponse(201, { listing }, 'Listing created'));
 });
@@ -35,13 +38,17 @@ const SORTS = {
 // GET /listings
 const getAll = catchAsync(async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
-  const { q, category, condition, minPrice, maxPrice, sort } = req.query;
+  const { q, category, condition, minPrice, maxPrice, sort, listingType } = req.query;
 
   // A suspended seller's listings come off the page entirely — see
   // utils/blockedUsers.js.
   const filter = { status: 'active', ...(await excludeBlocked('sellerId')) };
   if (category) filter.category = category;
   if (condition) filter.condition = condition;
+  // Listings created before renting existed have no listingType at all, so
+  // asking for sales has to include the ones that predate the field.
+  if (listingType === 'rent') filter.listingType = 'rent';
+  if (listingType === 'sale') filter.listingType = { $ne: 'rent' };
   if (minPrice || maxPrice) {
     filter.price = {};
     if (minPrice) filter.price.$gte = Number(minPrice);

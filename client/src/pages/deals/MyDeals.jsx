@@ -47,11 +47,26 @@ export default function MyDeals() {
       refresh();
       toast.success(
         deal.status === 'completed'
-          ? 'Both sides confirmed. The listing is marked sold.'
+          ? deal.dueAt
+            ? 'Both sides confirmed. The hire has started.'
+            : 'Both sides confirmed. The listing is marked sold.'
           : 'Confirmed. Waiting on the other side.'
       );
     },
     onError: (err) => toast.error(apiErrorMessage(err, 'Could not confirm that.')),
+  });
+
+  // Ends a hire: stops the clock, puts the listing back on the page and
+  // tells the renter. One action, because doing those separately left the
+  // deal reading "out" after the owner had already relisted the item.
+  const returnedMutation = useMutation({
+    mutationFn: (deal) => api.patch(`/deals/${deal._id}/returned`),
+    onSuccess: () => {
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ['listing'] });
+      toast.success('Marked returned. The listing is live again.');
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Could not mark that returned.')),
   });
 
   const disputeMutation = useMutation({
@@ -63,7 +78,8 @@ export default function MyDeals() {
     onError: (err) => toast.error(apiErrorMessage(err, 'Could not flag that deal.')),
   });
 
-  const busy = confirmMutation.isPending || disputeMutation.isPending;
+  const busy =
+    confirmMutation.isPending || disputeMutation.isPending || returnedMutation.isPending;
 
   return (
     <PageWrapper className="max-w-4xl">
@@ -102,6 +118,7 @@ export default function MyDeals() {
               onEnterCode={(d) => setModal({ open: true, deal: d, mode: 'enter' })}
               onConfirm={(d, isSeller) => confirmMutation.mutate({ deal: d, isSeller })}
               onDispute={(d) => disputeMutation.mutate(d)}
+              onReturned={(d) => returnedMutation.mutate(d)}
               onReview={(d, other) => setReview({ open: true, deal: d, name: other?.name })}
               reviewed={reviewedDealIds.has(String(deal._id))}
             />

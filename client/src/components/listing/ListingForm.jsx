@@ -6,7 +6,7 @@
 // Field rules mirror the server's Joi schema exactly — title 3-150,
 // description 10-3000, price >= 0 — so validation fails here with a readable
 // message instead of coming back as a 400.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -32,22 +32,41 @@ const CONDITION_LABEL = {
   'for-parts': 'For parts — not working',
 };
 
-const listingSchema = z.object({
-  title: z.string().trim().min(3, 'At least 3 characters').max(150, 'Keep it under 150'),
-  description: z
-    .string()
-    .trim()
-    .min(10, 'Say a bit more — at least 10 characters')
-    .max(3000, 'Keep it under 3000'),
-  price: z.coerce.number({ invalid_type_error: 'Enter a number' }).min(0, 'Price cannot be negative'),
-  category: z.string().min(1, 'Pick a category'),
-  condition: z.string().min(1, 'Pick a condition'),
-  pickupLocation: z.string().trim().optional(),
-  isNegotiable: z.boolean().optional(),
-  isFree: z.boolean().optional(),
-});
+const PERIOD_OPTIONS = [
+  { value: 'day', label: 'per day' },
+  { value: 'week', label: 'per week' },
+  { value: 'month', label: 'per month' },
+];
 
-export default function ListingForm({ listing = null }) {
+const listingSchema = z
+  .object({
+    title: z.string().trim().min(3, 'At least 3 characters').max(150, 'Keep it under 150'),
+    description: z
+      .string()
+      .trim()
+      .min(10, 'Say a bit more — at least 10 characters')
+      .max(3000, 'Keep it under 3000'),
+    listingType: z.enum(['sale', 'rent']),
+    price: z.coerce.number({ invalid_type_error: 'Enter a number' }).min(0, 'Price cannot be negative'),
+    rentPeriod: z.string().optional(),
+    securityDeposit: z.coerce
+      .number({ invalid_type_error: 'Enter a number' })
+      .min(0, 'A deposit cannot be negative')
+      .optional(),
+    category: z.string().min(1, 'Pick a category'),
+    condition: z.string().min(1, 'Pick a condition'),
+    pickupLocation: z.string().trim().optional(),
+    isNegotiable: z.boolean().optional(),
+    isFree: z.boolean().optional(),
+  })
+  // A rate with no period is meaningless, and the server refuses it anyway —
+  // catching it here turns a 400 into a message under the right field.
+  .refine((d) => d.listingType !== 'rent' || Boolean(d.rentPeriod), {
+    message: 'Say how long a hire lasts',
+    path: ['rentPeriod'],
+  });
+
+export default function ListingForm({ listing = null, onTypeChange }) {
   const navigate = useNavigate();
   const isEdit = Boolean(listing);
   const categories = useCategories();
@@ -66,7 +85,10 @@ export default function ListingForm({ listing = null }) {
     defaultValues: {
       title: listing?.title || '',
       description: listing?.description || '',
+      listingType: listing?.listingType || 'sale',
       price: listing?.price ?? '',
+      rentPeriod: listing?.rentPeriod || '',
+      securityDeposit: listing?.securityDeposit ?? '',
       category: listing?.category || '',
       condition: listing?.condition || '',
       pickupLocation: listing?.pickupLocation || '',
@@ -79,11 +101,28 @@ export default function ListingForm({ listing = null }) {
   // render, which the React Compiler refuses to memoize around.
   const isFree = useWatch({ control, name: 'isFree' });
   const isNegotiable = useWatch({ control, name: 'isNegotiable' });
+  const listingType = useWatch({ control, name: 'listingType' });
+  const isRent = listingType === 'rent';
+
+  // The page around this form titles itself off the same choice.
+  useEffect(() => {
+    onTypeChange?.(listingType);
+  }, [listingType, onTypeChange]);
 
   const onSubmit = async (data) => {
     setLoading(true);
     try {
       const payload = { ...data, price: data.isFree ? 0 : Number(data.price) };
+
+      // The server forbids rent fields on a sale outright, so they have to
+      // be dropped rather than sent empty — switching rent → sale mid-form
+      // would otherwise fail validation on leftovers.
+      if (isRent) {
+        payload.securityDeposit = Number(payload.securityDeposit) || 0;
+      } else {
+        delete payload.rentPeriod;
+        delete payload.securityDeposit;
+      }
 
       if (isEdit) {
         await api.patch(`/listings/${listing._id}`, payload);
@@ -112,7 +151,9 @@ export default function ListingForm({ listing = null }) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-[9px]" noValidate>
       <Panel index={0}>
-        <CaptionBox corner="tl">{isEdit ? 'Changing the details' : 'What are you selling?'}</CaptionBox>
+        <CaptionBox corner="tl">
+          {isEdit ? 'Changing the details' : isRent ? 'What are you lending out?' : 'What are you selling?'}
+        </CaptionBox>
 
         <div className="flex flex-col gap-4 pt-7">
           <Input
@@ -151,24 +192,73 @@ export default function ListingForm({ listing = null }) {
       </Panel>
 
       <Panel index={1}>
-        <CaptionBox corner="tl">The price</CaptionBox>
+        <CaptionBox corner="tl">{isRent ? 'The rate' : 'The price'}</CaptionBox>
 
         <div className="flex flex-col gap-4 pt-7">
-          <Input
-            label="Price (₹)"
-            type="number"
-            min="0"
-            step="1"
-            placeholder="2100"
-            disabled={isFree}
-            error={errors.price?.message}
-            hint={isFree ? 'Giving it away — price is fixed at zero.' : undefined}
-            {...register('price')}
-          />
+          <div>
+            <p className="label-xs mb-1.5">Are you selling it or lending it out?</p>
+            <div className="flex border-2 border-ink">
+              <TypeTab
+                active={!isRent}
+                label="For sale"
+                sub="They keep it"
+                onClick={() => setValue('listingType', 'sale', { shouldValidate: true })}
+              />
+              <TypeTab
+                active={isRent}
+                label="For rent"
+                sub="You get it back"
+                onClick={() => setValue('listingType', 'rent', { shouldValidate: true })}
+              />
+            </div>
+          </div>
+
+          <div className={isRent ? 'grid gap-4 sm:grid-cols-2' : ''}>
+            <Input
+              label={isRent ? 'Rate (₹)' : 'Price (₹)'}
+              type="number"
+              min="0"
+              step="1"
+              placeholder={isRent ? '150' : '2100'}
+              disabled={isFree}
+              error={errors.price?.message}
+              hint={
+                isFree
+                  ? isRent
+                    ? 'Lending it for nothing — the rate is zero.'
+                    : 'Giving it away — price is fixed at zero.'
+                  : undefined
+              }
+              {...register('price')}
+            />
+
+            {isRent && (
+              <Select
+                label="For how long"
+                placeholder="Pick a period"
+                options={PERIOD_OPTIONS}
+                error={errors.rentPeriod?.message}
+                {...register('rentPeriod')}
+              />
+            )}
+          </div>
+
+          {isRent && (
+            <Input
+              label="Security deposit (₹)"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="0"
+              error={errors.securityDeposit?.message}
+              hint="Held while they have it, returned when you get it back. Leave at zero if you are not asking for one."
+              {...register('securityDeposit')}
+            />
+          )}
 
           <div className="flex flex-col gap-2.5">
             <Checkbox
-              label="Giving it away free"
+              label={isRent ? 'Lending it out for free' : 'Giving it away free'}
               checked={Boolean(isFree)}
               onChange={(v) => {
                 setValue('isFree', v);
@@ -216,6 +306,27 @@ export default function ListingForm({ listing = null }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+// Sale or rent, as two halves of one inked switch. Not a checkbox: these are
+// two different kinds of listing, not a setting on one kind, and the pair
+// has to read as a choice already made rather than a box left unticked.
+function TypeTab({ active, label, sub, onClick }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`flex min-h-[46px] flex-1 flex-col justify-center px-3 py-2 text-left transition-colors ${
+        active ? 'bg-ink text-paper-3' : 'bg-paper-3 text-ink hover:bg-paper-2'
+      }`}
+    >
+      <span className="text-[13px] font-extrabold leading-none">{label}</span>
+      <span className={`mt-1 text-[11px] font-semibold leading-none ${active ? 'text-ice' : 'text-steel'}`}>
+        {sub}
+      </span>
+    </button>
   );
 }
 

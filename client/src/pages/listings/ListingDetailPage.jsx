@@ -58,6 +58,17 @@ export default function ListingDetailPage() {
     onError: (err) => toast.error(apiErrorMessage(err, 'Could not save that.')),
   });
 
+  // The way back from 'rented'. A hire ends with the item in the owner's
+  // hands again, so unlike a sale this status has to be reversible.
+  const relistMutation = useMutation({
+    mutationFn: () => api.patch(`/listings/${id}/relist`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['listing', id] });
+      toast.success('Back on the page.');
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Could not list that again.')),
+  });
+
   const onSave = () => {
     if (!isAuthenticated) {
       toast.error('Sign in to save a listing.');
@@ -100,7 +111,14 @@ export default function ListingDetailPage() {
 
   return (
     <PageWrapper>
-      <ListingDetail listing={listing} isOwner={isOwner} onSave={onSave} saved={saved} />
+      <ListingDetail
+        listing={listing}
+        isOwner={isOwner}
+        onSave={onSave}
+        saved={saved}
+        onRelist={() => relistMutation.mutate()}
+        relisting={relistMutation.isPending}
+      />
 
       {similar?.length > 0 && (
         <section className="mt-6">
