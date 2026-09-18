@@ -1411,14 +1411,23 @@ both apps is built.** No stubs remain in `/admin`. What is left:
 2. **The client entry still carries `socket.io-client`** (~30 kB gzipped)
    for signed-out visitors. See the end of the code-splitting section above
    for why it was left and what deferring it costs.
-3. **The frontend end-to-end suite has only its smoke tests.**
-   `client/tests/e2e` boots its own stack (in-memory mongod on a throwaway
-   dbPath -> `server.js` on 5055 -> vite `--mode e2e` on 5199 -> headless
-   Chrome) and never touches Atlas or the dev servers. Run it with
-   `cd client && npm run test:e2e`. Three smoke tests pass: front page
-   renders clean, a seeded listing reaches /browse, sign-in through the real
-   form lands a session. Next: the product loop (post -> chat -> offer ->
-   deal) with two tabs, then `/admin`, which has no e2e coverage yet.
+3. **The admin app has no end-to-end tests yet.** `client/tests/e2e`
+   boots its own stack (in-memory mongod on a throwaway dbPath ->
+   `server.js` on 5055 -> vite `--mode e2e` on 5199 -> headless Chrome) and
+   never touches Atlas or the dev servers. Run it with
+   `cd client && npm run test:e2e` (~2 min). Covered:
+   - `smoke.test.mjs`: the front page renders clean, a seeded listing
+     reaches /browse, sign-in through the real form lands a session.
+   - `deal.test.mjs`: the whole sale loop with two people in two tabs:
+     post through the form -> message -> live reply over the socket ->
+     offer -> accept -> show code / enter code -> both confirm (listing goes
+     `sold`) -> review. One test, one named step per stage.
+   - `navigation.test.mjs`: every student page has a link a user can
+     actually click, at desktop width and at phone width, from a page that
+     is not Home. It never opens a destination by URL, so a link that exists
+     at only one screen size fails.
+   Next: the same harness pointed at `/admin` (the moderation queue is the
+   obvious first flow), then the rent path through `RentalLengthModal`.
    Notes a cold reader would trip on:
    - `page.errors` drops Chrome's "Failed to load resource" lines; failed
      API calls land in `page.failures` instead, with the URL. The only 4xx
@@ -1431,7 +1440,29 @@ both apps is built.** No stubs remain in `/admin`. What is left:
      `before` hook, so just run it again.
    - `server.js` skips the Bull job queues when `NODE_ENV=test`; the
      harness runs with no Redis.
-4. **Deposits still change hands in cash.** Nothing on the platform holds,
+   - Wait for chat text with `waitForMessage`, not `waitForText`. The
+     conversation list shows each thread's latest message, so page-wide
+     text matching passes even when the socket never delivered it. This
+     was caught by breaking the socket listener on purpose: the page-wide
+     version still passed.
+   - `press` and the nav test only click once a tap would land on the
+     element (`elementFromPoint`), not merely once it is visible. Modals and
+     the mobile drawer open with a clip-path wipe; clicking a half-revealed
+     modal button hits the scrim, which closes the modal. That was the deal
+     test's one-in-five flake. Call `waitForDialog` before typing into a
+     modal.
+   - `startStack` refuses to run if 5055 or 5199 is already taken, and
+     `stopStack` waits for the kill to finish. Without both, a run could
+     silently test the previous run's still-dying servers.
+4. **Phone verification is unreachable.** `/verify-phone` (Twilio OTP) is
+   routed, but nothing links or redirects to it: VerifyEmail ends without
+   sending anyone there, and nothing reads `isPhoneVerified`. Either wire
+   it in after email verification (and decide what it gates), or delete the
+   page and the route. A product decision, so left as is.
+5. **The admin sidebar never collapses.** It is a fixed 248px column, so
+   the admin app is unusable on a phone. Fine if moderators work at a desk;
+   worth a drawer if they don't.
+6. **Deposits still change hands in cash.** Nothing on the platform holds,
    escrows or settles one — the UI now says so at every point (see below),
    but if a renter never gets their deposit back the only recourse is the
    dispute button and a moderator. That is the same as a sale going wrong,

@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import net from 'node:net';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT = path.resolve(HERE, '..', '..');
@@ -132,7 +133,23 @@ const startWeb = async () => {
   await waitFor(async () => (await fetch(WEB)).ok, 'the dev server');
 };
 
+// Something already listening on our ports is a server this run did not
+// start — usually the last run's, still dying. The readiness probes below
+// would happily accept it, and every test would then run against it. Refuse
+// instead.
+const assertPortFree = (port) =>
+  new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', () =>
+      reject(new Error(`Port ${port} is already in use — stop whatever holds it and run again.`))
+    );
+    probe.once('listening', () => probe.close(resolve));
+    probe.listen(port);
+  });
+
 export const startStack = async () => {
+  await assertPortFree(API_PORT);
+  await assertPortFree(WEB_PORT);
   const uri = await startMongo();
   await startApi(uri);
   await startWeb();
@@ -152,10 +169,16 @@ export const stopStack = async () => {
     if (!child) continue;
     // The vite process spawns its own child on Windows; killing the tree is
     // what actually frees the port.
+    // Awaited, so the ports are actually free when this run hands over.
     if (process.platform === 'win32') {
-      spawn('taskkill', ['/pid', String(child.pid), '/f', '/t'], { stdio: 'ignore' });
-    } else {
-      child.kill('SIGTERM');
+      await new Promise((resolve) =>
+        spawn('taskkill', ['/pid', String(child.pid), '/f', '/t'], { stdio: 'ignore' }).on('exit', resolve)
+      );
+    } else if (child.exitCode === null) {
+      await new Promise((resolve) => {
+        child.once('exit', resolve);
+        child.kill('SIGTERM');
+      });
     }
   }
   await mongoose.disconnect();
@@ -215,6 +238,9 @@ export const openTab = async ({ collectErrors = true } = {}) => {
 
 export const db = () => mongoose.connection.db;
 
+// Ids read off a page are strings; the collections hold ObjectIds.
+export const oid = (id) => new mongoose.Types.ObjectId(String(id));
+
 let seq = 0;
 export const uniq = () => `${Date.now().toString(36)}${(seq += 1)}`;
 
@@ -267,6 +293,81 @@ export const makeListing = async (sellerId, overrides = {}) => {
   const { insertedId } = await db().collection('listings').insertOne(doc);
   return { _id: insertedId, ...doc };
 };
+
+// The post form's category menu is read from this collection. An empty one
+// leaves nothing to pick, so any test that posts a listing seeds it first.
+export const makeCategory = async (slug = 'books', name = 'Books') => {
+  await db()
+    .collection('categories')
+    .updateOne(
+      { slug },
+      { $setOnInsert: { slug, name, isActive: true, order: 0, parentId: null, customFields: [] } },
+      { upsert: true }
+    );
+};
+
+// Clicks the button whose visible label contains `label`, once a tap on it
+// would actually land on it: visible, enabled, and not covered.
+//
+// "Visible" is not enough here. Modals and the mobile drawer open with a
+// clip-path wipe, and until it finishes a tap on a half-revealed button goes
+// through to whatever is behind it. For a modal that is the scrim, whose
+// click handler closes the modal — so an early click on "Generate the code"
+// silently shut the dialog instead. That made the deal test fail about one
+// run in five.
+export const press = async (page, label, { timeout = 20000 } = {}) => {
+  const button = await page.waitForFunction(
+    (text) =>
+      [...document.querySelectorAll('button')].find((b) => {
+        if (b.disabled || !b.textContent.includes(text)) return false;
+        if (!b.checkVisibility({ visibilityProperty: true })) return false;
+        // elementFromPoint only sees the viewport, and a button below the
+        // fold (Publish, at the end of a long form) would never pass.
+        b.scrollIntoView({ block: 'center', inline: 'center' });
+        const r = b.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return hit && b.contains(hit);
+      }) || null,
+    { timeout },
+    label
+  );
+  await button.asElement().click();
+};
+
+// Waits until the open dialog has finished its opening wipe: all four
+// inner corners are on top. Anything typed or clicked in it before then can
+// land on the scrim behind it, which closes it (see `press`).
+export const waitForDialog = (page, timeout = 10000) =>
+  page.waitForFunction(
+    () => {
+      const d = document.querySelector('[role="dialog"]');
+      if (!d) return false;
+      const r = d.getBoundingClientRect();
+      const inset = 6;
+      return [
+        [r.left + inset, r.top + inset],
+        [r.right - inset, r.top + inset],
+        [r.left + inset, r.bottom - inset],
+        [r.right - inset, r.bottom - inset],
+      ].every(([x, y]) => d.contains(document.elementFromPoint(x, y)));
+    },
+    { timeout }
+  );
+
+// Waits until the page's text contains `needle`, which is how a test waits
+// for something that arrives over the socket.
+export const waitForText = (page, needle, timeout = 20000) =>
+  page.waitForFunction((n) => document.body.textContent.includes(n), { timeout }, needle);
+
+// Waits for a chat message in the open thread itself. Not waitForText: the
+// conversation list previews each thread's latest message, so the text shows
+// up in the sidebar even when the thread never received it over the socket.
+export const waitForMessage = (page, text, timeout = 20000) =>
+  page.waitForFunction(
+    (t) => [...document.querySelectorAll('.bubble')].some((b) => b.textContent.includes(t)),
+    { timeout },
+    text
+  );
 
 // Signs in through the real form, so the tab ends up holding exactly the
 // cookies a browser would.

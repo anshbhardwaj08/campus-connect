@@ -9,7 +9,19 @@
 // one 64px strip stops reading as emphasis and starts reading as wallpaper.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { MessageCircle, Bell, Plus, Menu, X, User, Settings, LogOut, Package } from 'lucide-react';
+import {
+  MessageCircle,
+  Bell,
+  Plus,
+  Menu,
+  X,
+  User,
+  Settings,
+  LogOut,
+  Package,
+  Handshake,
+  Heart,
+} from 'lucide-react';
 
 import { useAuth } from '../../hooks/useAuth';
 import useSignOut from '../../hooks/useSignOut';
@@ -26,6 +38,18 @@ const NAV_LINKS = [
   { to: '/events', label: 'Events' },
   { to: '/lost-found', label: 'Lost & found' },
   { to: '/carpool', label: 'Carpool' },
+];
+
+// Everything that belongs to the signed-in student. One list, read by both
+// the avatar menu and the mobile drawer: they used to be two hand-written
+// lists, and they drifted — Your deals was only in the drawer, which is
+// hidden on desktop, so desktop had no way to reach it at all.
+const ACCOUNT_LINKS = [
+  { to: '/profile', label: 'Your profile', icon: User },
+  { to: '/profile?tab=listings', label: 'Your panels', icon: Package },
+  { to: '/deals', label: 'Your deals', icon: Handshake },
+  { to: '/saved', label: 'Saved', icon: Heart },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 const navLinkClass = ({ isActive }) =>
@@ -139,27 +163,16 @@ export default function Navbar() {
 
           {isAuthenticated && (
             <div className="mt-4 flex flex-col">
-              <Link
-                to="/profile"
-                onClick={() => setMobileOpen(false)}
-                className="border-b border-paper-3/10 py-3 text-[13px] font-extrabold uppercase tracking-[.06em] text-paper-3/80"
-              >
-                Your profile
-              </Link>
-              <Link
-                to="/deals"
-                onClick={() => setMobileOpen(false)}
-                className="border-b border-paper-3/10 py-3 text-[13px] font-extrabold uppercase tracking-[.06em] text-paper-3/80"
-              >
-                Your deals
-              </Link>
-              <Link
-                to="/settings"
-                onClick={() => setMobileOpen(false)}
-                className="border-b border-paper-3/10 py-3 text-[13px] font-extrabold uppercase tracking-[.06em] text-paper-3/80"
-              >
-                Settings
-              </Link>
+              {ACCOUNT_LINKS.map(({ to, label }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  onClick={() => setMobileOpen(false)}
+                  className="border-b border-paper-3/10 py-3 text-[13px] font-extrabold uppercase tracking-[.06em] text-paper-3/80"
+                >
+                  {label}
+                </Link>
+              ))}
               <button
                 type="button"
                 onClick={() => {
@@ -229,12 +242,6 @@ function AccountMenu({ user }) {
     };
   }, [open]);
 
-  const items = [
-    { to: '/profile', label: 'Your profile', icon: User },
-    { to: '/profile?tab=listings', label: 'Your panels', icon: Package },
-    { to: '/settings', label: 'Settings', icon: Settings },
-  ];
-
   return (
     <div ref={ref} className="relative ml-0.5">
       <button
@@ -258,7 +265,7 @@ function AccountMenu({ user }) {
             <p className="meta truncate">{user?.collegeEmail}</p>
           </div>
 
-          {items.map(({ to, label, icon: Icon }) => (
+          {ACCOUNT_LINKS.map(({ to, label, icon: Icon }) => (
             <Link
               key={to}
               to={to}

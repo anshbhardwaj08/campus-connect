@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
 
 import adminApi from '../../services/adminApi';
+import { useAdminAuth } from '../../hooks/useAdminAuth';
 import apiErrorMessage from '../../utils/apiError';
 import AdminNavbar from '../../components/layout/AdminNavbar';
 import Panel from '../../components/ui/Panel';
@@ -26,6 +27,10 @@ const slugify = (s) =>
 
 export default function CategoryManager() {
   const queryClient = useQueryClient();
+  // Creating a category is admin-only on the server. A moderator used to get
+  // the whole form, fill it in, and be refused with a 403 at the end.
+  const { user: me } = useAdminAuth();
+  const isAdmin = me?.role === 'admin';
   const [form, setForm] = useState({ name: '', icon: '' });
   const [error, setError] = useState('');
 
@@ -91,28 +96,37 @@ export default function CategoryManager() {
           ))}
         </div>
 
-        <Panel>
-          <span className="caption caption--tl">Add one</span>
-          <form onSubmit={submit} className="mt-5 flex flex-col gap-3.5">
-            <Input
-              label="Name"
-              placeholder="Musical instruments"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            />
-            <Input
-              label="Icon (optional emoji)"
-              placeholder="🎸"
-              value={form.icon}
-              onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
-            />
-            {form.name.trim() && <p className="meta">Slug: {slugify(form.name)}</p>}
-            {error && <p className="text-[11.5px] font-bold leading-snug text-crimson">{error}</p>}
-            <Button variant="primary" size="lg" loading={create.isPending} className="w-full">
-              <Plus className="h-4 w-4" strokeWidth={3} /> Create category
-            </Button>
-          </form>
-        </Panel>
+        {isAdmin ? (
+          <Panel>
+            <span className="caption caption--tl">Add one</span>
+            <form onSubmit={submit} className="mt-5 flex flex-col gap-3.5">
+              <Input
+                label="Name"
+                placeholder="Musical instruments"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+              <Input
+                label="Icon (optional emoji)"
+                placeholder="🎸"
+                value={form.icon}
+                onChange={(e) => setForm((f) => ({ ...f, icon: e.target.value }))}
+              />
+              {form.name.trim() && <p className="meta">Slug: {slugify(form.name)}</p>}
+              {error && <p className="text-[11.5px] font-bold leading-snug text-crimson">{error}</p>}
+              <Button variant="primary" size="lg" loading={create.isPending} className="w-full">
+                <Plus className="h-4 w-4" strokeWidth={3} /> Create category
+              </Button>
+            </form>
+          </Panel>
+        ) : (
+          <Panel>
+            <span className="caption caption--tl">Add one</span>
+            <p className="meta mt-5 leading-relaxed">
+              Only an admin can add a category. Ask one if a listing has nowhere to go.
+            </p>
+          </Panel>
+        )}
       </div>
     </>
   );
