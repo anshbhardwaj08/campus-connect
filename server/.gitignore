@@ -3,3 +3,6 @@ node_modules/
 logs/
 *.log
 .DS_Store
+
+# Data files for the throwaway MongoDB the test suite boots (tests/helpers/db.js)
+.test-db/

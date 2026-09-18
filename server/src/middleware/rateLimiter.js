@@ -1,5 +1,10 @@
 const rateLimit = require('express-rate-limit');
 
+// The suite fires hundreds of requests from one address in a few seconds,
+// which is exactly what these are built to stop. NODE_ENV is only ever
+// 'test' under `npm test`, never in development or production.
+const isTest = () => process.env.NODE_ENV === 'test';
+
 // General API traffic.
 //
 // This was 100 per 15 minutes, which real browsing blows through: one page
@@ -13,6 +18,7 @@ const rateLimit = require('express-rate-limit');
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 600,
+  skip: isTest,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please try again later' },
@@ -28,6 +34,7 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   skipSuccessfulRequests: true,
+  skip: isTest,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -48,6 +55,7 @@ const authLimiter = rateLimit({
 const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
+  skip: isTest,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

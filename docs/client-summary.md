@@ -87,11 +87,30 @@ controls and swallow clicks aimed at them for as long as the toast is up —
 the buttons look fine and simply do not respond. Found by a click landing on
 an `LI` (the toast) instead of the account button.
 
+## Bundle
+
+Every route in `routes/AppRoutes.jsx` is a lazy import, so a page is fetched
+the first time somebody goes there. A cold visit to `/` downloads 552.7 kB
+(183.0 gzipped); it used to be 773.7 kB / 238.1 for every route.
+
+- **Do not lazy-load shared components.** Panel, Button, the masthead and
+  `lib/motion.js` are imported normally and the bundler hoists them into one
+  shared chunk. Behind a lazy import they would cost a round trip on every
+  page instead of one download.
+- `<Suspense>` wraps the whole route tree and falls back to
+  `layout/RouteFallback`.
+- `vite.config.js` splits `react-vendor` out so a deploy does not invalidate
+  React in everybody's cache. **Keep it scoped to react/react-dom/scheduler**
+  — a catch-all on `node_modules` undoes the per-route split.
+- `/login` is heavier than `/` (627.9 kB): the form pulls `react-hook-form`
+  and `zod`, which nothing else on a first visit needs.
+- `socket.io-client` is still in the entry chunk, so a signed-out visitor
+  downloads it to browse — see CONTEXT.md for why it was left there.
+
 ## Known gaps
 
 - **Listing photos are set at creation only** — the server's PATCH route has
   no upload middleware, so the edit form hides the picker
-- **No forgot-password** — no server route exists
-- **No account-suspended screen** — `AuthLayout` supports it
-  (`splashTone="crimson"`), nothing renders it
-- Bundle ~600 kB; worth code-splitting as pages grow
+- **Nothing here is covered by automated tests.** The server suite
+  (`server && npm test`) stops at the API; this app is still checked by
+  `npm run check:ui` and reading the screenshot

@@ -6,7 +6,7 @@ A running handoff file. **Read this first when starting a new session**, then
 Keep it current: when a chunk of work lands, move it from "Next up" to "Done"
 and add anything a cold reader could not infer from the code.
 
-Last updated: 2026-09-16 (both apps complete; renting, the hire clock and deal notifications added)
+Last updated: 2026-09-18 (both apps complete; renting, the hire clock, and a server test suite)
 
 ---
 
@@ -1267,6 +1267,137 @@ queues per running server adds up fast on a free tier. Crashed `nodemon`
 instances hold theirs until they time out — if Redis starts refusing
 connections, look for stray node processes before blaming the plan.
 
+### There is a test suite now (2026-09-18)
+
+Everything until this point was verified by driving a real browser once and
+then deleting the artefacts. That catches what a person would see and
+nothing else — the next change to the ban rules, the stats aggregations or
+the hire clock had nothing watching it.
+
+`cd server && npm test` — **157 tests, about seven seconds.** No framework:
+node's own runner, `node:assert/strict`, and one dev dependency
+(`mongodb-memory-server`). Full detail in `docs/testing.md`; what matters
+here:
+
+**Tests never load `server/.env`.** `tests/helpers/env.js` builds its own
+environment and explicitly deletes `MONGO_URI`, so the live connection
+string is not in the process at all. Each test file boots its own throwaway
+`mongod` on a random local port. This is the point of the whole design: a
+verification script once deleted a real student's event because it matched a
+row by position against the live database, and no typo, bad query or copied
+file can reach that data from in here.
+
+The weight is on **guards rather than happy paths**, because most of them
+exist to close a hole found late — deal endpoints with no ownership check,
+reviews taking their subject from the request body, `sendMessage` never
+checking membership, handlers spreading `req.body` into a model. Every one
+of those now fails a test if it comes back.
+
+It runs the **real Express app over real HTTP with a real cookie jar**, not
+supertest and nothing mocked: this product's auth is httpOnly cookies, and
+the likely break is a cookie not set, not sent back, or not cleared.
+
+Three changes were needed in `src/` to make it runnable, all gated on
+`NODE_ENV === 'test'` and therefore inert in development and production: the
+rate limiters skip, winston goes silent, and the Redis client connects
+lazily (it is imported by `auth.controller`, so otherwise every test process
+opened a socket to a broker that is not there and kept the runner alive
+after the last assertion).
+
+Two environment notes worth keeping, because both read as something else
+when they bite:
+
+- The mongod data files go to `server/.test-db/`, not the OS temp directory,
+  because **this machine's C: drive is under 500MB free and mongod refuses
+  to build indexes below that**. The failure surfaces as a test hook error,
+  not as a disk error. `TEST_DB_PATH` moves it.
+- **Mongoose strips `createdAt` out of every update**, so backdating a
+  document for the day-bucketing tests has to go through the driver
+  (`Model.collection.updateOne`).
+
+Found while writing it, and left alone deliberately: two JWTs signed for the
+same user within the same second are byte-identical, because the payload is
+`{ userId, iat }` and `iat` is whole seconds. It is not a hole — both tokens
+belong to the same person — but it means "a reissued token differs" is not
+a safe assertion, and refresh-token rotation has a sub-second window where
+an old token still matches. Noted rather than fixed.
+
+### Both frontends are code-split (2026-09-18)
+
+Each app shipped as one JavaScript file, so opening the admin login
+downloaded the dashboard's charts, the live socket client and every table
+before it could ask for a password. Both builds had been flagged for it
+since they were finished.
+
+Every **route** is now a lazy import — `routes/AppRoutes.jsx` and
+`routes/AdminRoutes.jsx` — so each page is its own chunk, fetched the first
+time somebody goes there. Measured in a real browser against `vite preview`
+with a cold cache, so these are bytes actually downloaded rather than
+chunk-table arithmetic:
+
+| | before (every route) | after |
+|---|---|---|
+| client `/` | 773.7 kB / 238.1 gzip | **552.7 kB / 183.0 gzip** |
+| client `/browse` | same | 559.5 kB / 186.2 gzip |
+| client `/login` | same | 627.9 kB / 202.1 gzip |
+| admin `/login` | 588.8 kB / 189.9 gzip | **415.5 kB / 134.3 gzip** |
+
+The client's login page is **heavier than its home page**, and that is not a
+mistake: the sign-in form pulls `react-hook-form` and `zod` (~90 kB), which
+no other first-visit page needs. The admin login is light precisely because
+it does not use them.
+
+**Do not lazy-load shared components.** Panel, Button, the masthead,
+`motion.js` — those are imported normally and the bundler hoists them into a
+chunk loaded once. Putting one behind a lazy import trades a single download
+for a round trip on every page that uses it.
+
+**`react-vendor` is a deliberate second split**, in both `vite.config.js`
+files. It saves nothing on a first visit — the same bytes arrive either way
+— but React is about a third of the compressed payload and only changes when
+we upgrade it, so shipping a bug fix no longer invalidates it in everybody's
+cache. It is scoped to `react`/`react-dom`/`scheduler` only: a catch-all on
+`node_modules` was tried and made things **worse**, sweeping up gsap, zod,
+react-hook-form and the icon set — libraries only some pages need, which the
+bundler was already placing correctly — and handing them to every page.
+
+Splitting needs somewhere to look while a chunk arrives, and the two apps
+want different things:
+
+- The client has **one boundary** around the whole route tree, falling back
+  to `layout/RouteFallback` — breathing halftone blocks shaped roughly like
+  a page, no spinner and no crimson. On a warm cache it is on screen for a
+  frame or two, and something that appears for 40ms reads as a glitch rather
+  than as progress.
+- The admin has **two**. The page one lives inside `AdminWrapper`, around
+  the `<Outlet />`, so the sidebar stays put — it is navigation, and a rail
+  that vanished every time you clicked it would be worse than the wait. The
+  outer boundary only ever covers login and the 404, and falls back to
+  nothing, because the paper ground and its halftone live on `<body>`.
+
+**Both 404s were a bare `<div>Page not found</div>`** — the only screens in
+the product with no theme on them, reached by every typo and every stale
+link. Both are real pages now (`pages/NotFound.jsx` in each app). Each
+spends its panel's single crimson hit on a word in the headline, so the
+button is ink — the same call `Suspended` and the deal card's return button
+already make.
+
+Verified: the client's `check:ui` across seven routes, and a throwaway
+moderator driving all ten admin pages in a real browser — every chunk
+loading, the sidebar surviving each navigation, no console errors, the 404
+themed. 24 checks, run three times to confirm they were stable, the account
+deleted by the id the script created, and a sweep afterwards confirming
+nothing was left behind.
+
+**The next available win, not taken:** `socket.io-client` (~90 kB, ~30 kB
+gzipped) sits in the client's entry chunk, so a signed-out visitor
+downloads it just to browse. Deferring it is not a config change —
+`useNotifications` and `ChatWindow` read a module-level `getSocket()` inside
+effects keyed on `isAuthenticated`, and that ordering only works because
+`connectSocket` is synchronous. Making it async needs a socket-ready signal
+threaded through both, which is a refactor of live chat with no frontend
+tests behind it. Worth doing deliberately, not as a side effect of this.
+
 ---
 
 ## Next up
@@ -1277,17 +1408,14 @@ both apps is built.** No stubs remain in `/admin`. What is left:
 1. **Before deploying:** delete `moderator.demo@pec.edu.in` (or change its
    password) and decide what to do with the demo students and their
    listings.
-2. **Bundle size.** `/client` is ~764 kB and `/admin` ~589 kB (measured
-   2026-09-16), both flagged by the build. `/admin` grew ~53 kB when the
-   ticker pulled `socket.io-client` into the bundle for the first time —
-   that is the cost of the strip being live rather than polled. Worth
-   code-splitting by route; the login screen alone pulls the whole app.
-3. **No tests.** Everything so far has been verified by driving a real
-   browser and then deleting the artefacts. That catches what a person
-   would see and nothing else — there is no regression suite, so the next
-   change to the ban rules, the stats aggregations or the hire clock has
-   nothing watching it. The verification scripts written for each feature
-   are throwaway; turning them into a suite is the obvious next move.
+2. **The client entry still carries `socket.io-client`** (~30 kB gzipped)
+   for signed-out visitors. See the end of the code-splitting section above
+   for why it was left and what deferring it costs.
+3. **Nothing tests the two frontends.** The server suite stops at the API;
+   `/client` and `/admin` are still checked by driving a browser
+   (`npm run check:ui`) and reading the screenshot. A broken render, a
+   swallowed click or a component that silently stops updating would not
+   fail anything.
 4. **Deposits still change hands in cash.** Nothing on the platform holds,
    escrows or settles one — the UI now says so at every point (see below),
    but if a renter never gets their deposit back the only recourse is the
@@ -1307,6 +1435,8 @@ both apps is built.** No stubs remain in `/admin`. What is left:
 
 ## Reference
 
+- **`docs/testing.md`** — the server test suite, how to run it and how to
+  add to it
 - **`docs/client-summary.md`** — what the client app has, in brief
 - **`docs/admin-summary.md`** — admin state and build order, in brief
 - Design spec: `docs/design-system.md`

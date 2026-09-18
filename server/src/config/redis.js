@@ -4,6 +4,11 @@ const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 const redisClient = new Redis(REDIS_URL, {
   maxRetriesPerRequest: null,
+  // Under test, connect only if something actually issues a command. This
+  // module is imported by auth.controller, so without it every test process
+  // would open a socket to a broker that is not there, retry forever, and
+  // keep the runner alive after the last assertion had passed.
+  ...(process.env.NODE_ENV === 'test' ? { lazyConnect: true, enableOfflineQueue: false } : {}),
 });
 
 redisClient.on('connect', () => {

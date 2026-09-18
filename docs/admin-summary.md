@@ -140,9 +140,36 @@ lines. It exists in **both** copies, client included, to keep them identical.
   students because their seller is suspended — consistent with the "Active
   listings" KPI beside it, which has always counted the same way.
 
+## Bundle
+
+Every route in `routes/AdminRoutes.jsx` is a lazy import. A cold visit to
+`/login` downloads 415.5 kB (134.3 gzipped); it used to be 588.8 kB / 189.9
+for every route, dashboard charts and socket client included — before it
+could even ask for a password.
+
+- **Two `<Suspense>` boundaries, not one.** The page boundary lives inside
+  `AdminWrapper` around the `<Outlet />`, so the sidebar stays on screen
+  while a page loads; it is navigation, and a rail that vanished every time
+  you clicked it would be worse than the wait. The outer one covers only
+  login and the 404 and falls back to nothing — the paper ground is on
+  `<body>`.
+- **Do not lazy-load shared components** (Panel, Button, DataTable, the
+  sidebar, `lib/motion.js`). They are hoisted into one shared chunk; behind
+  a lazy import they would cost a round trip per page.
+- `vite.config.js` splits `react-vendor` out for cache stability across
+  deploys. **Keep it scoped to react/react-dom/scheduler** — a catch-all on
+  `node_modules` undoes the per-route split.
+- The dashboard is the heaviest page (55 kB) because the charts and
+  `socket.io-client` live there. That is now the dashboard's cost alone,
+  not everyone's.
+
 ## Testing against this database
 
 It holds **real accounts and real content** alongside demo data. Never
 target records by row position ("the first Cancel button") — a verification
 script did exactly that and permanently deleted a real user's event, RSVPs
 included. Match on an identifier the test itself created.
+
+The server has an automated suite (`cd server && npm test`) that cannot
+reach this database at all — see `docs/testing.md`. Nothing covers this app;
+it is still verified by driving a browser.

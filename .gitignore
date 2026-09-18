@@ -20,3 +20,6 @@ admin/dist/
 admin/.env
 client/.ui-check/
 admin/.ui-check/
+
+# Data files for the throwaway MongoDB the test suite boots (tests/helpers/db.js)
+server/.test-db/

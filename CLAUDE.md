@@ -10,6 +10,7 @@ and access community features like Lost & Found, carpools, and events.
 - docs/client-summary.md  -> client app, in brief
 - docs/admin-summary.md   -> admin app, in brief
 - docs/design-system.md   -> Comic Noir UI spec
+- docs/testing.md         -> server test suite: how to run it, how to add to it
 
 ## UI rule (applies to every screen, client and admin)
 The entire product uses ONE theme: **Comic Noir**. Every new page, component
@@ -40,6 +41,12 @@ JWT (httpOnly cookies), bcryptjs, Twilio OTP, Nodemailer, OpenAI API
 ## API base
 All backend routes: /api/v1/*
 Admin-only routes: /api/v1/admin/* (requireRole: admin or moderator)
+
+## Tests
+`cd server && npm test` — node's own runner, no framework. Run it before
+touching the ban rules, the deal handshake, the hire clock or the admin
+stats aggregations; all four are covered. Tests never load server/.env and
+never reach the real database — read docs/testing.md before adding one.
 
 ## Coding conventions
 - All API responses use ApiResponse wrapper: { success, data, message }
