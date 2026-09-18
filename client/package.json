@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "check:ui": "node scripts/check-ui.cjs"
+    "check:ui": "node scripts/check-ui.cjs",
+    "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.test.mjs\""
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

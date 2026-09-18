@@ -1411,11 +1411,26 @@ both apps is built.** No stubs remain in `/admin`. What is left:
 2. **The client entry still carries `socket.io-client`** (~30 kB gzipped)
    for signed-out visitors. See the end of the code-splitting section above
    for why it was left and what deferring it costs.
-3. **Nothing tests the two frontends.** The server suite stops at the API;
-   `/client` and `/admin` are still checked by driving a browser
-   (`npm run check:ui`) and reading the screenshot. A broken render, a
-   swallowed click or a component that silently stops updating would not
-   fail anything.
+3. **The frontend end-to-end suite has only its smoke tests.**
+   `client/tests/e2e` boots its own stack (in-memory mongod on a throwaway
+   dbPath -> `server.js` on 5055 -> vite `--mode e2e` on 5199 -> headless
+   Chrome) and never touches Atlas or the dev servers. Run it with
+   `cd client && npm run test:e2e`. Three smoke tests pass: front page
+   renders clean, a seeded listing reaches /browse, sign-in through the real
+   form lands a session. Next: the product loop (post -> chat -> offer ->
+   deal) with two tabs, then `/admin`, which has no e2e coverage yet.
+   Notes a cold reader would trip on:
+   - `page.errors` drops Chrome's "Failed to load resource" lines; failed
+     API calls land in `page.failures` instead, with the URL. The only 4xx
+     allowed there is the signed-out session probe (401 on `/users/me` and
+     `/auth/refresh-token`), which is how the app learns nobody is signed in.
+   - `/users/me` fires twice on load in dev. That is StrictMode; the second
+     call queues behind the single refresh as designed.
+   - The first run downloads a ~345MB MongoDB archive (unpacked, 74MB in
+     `~/.cache/mongodb-binaries`). On a cold cache that can blow the 180s
+     `before` hook, so just run it again.
+   - `server.js` skips the Bull job queues when `NODE_ENV=test`; the
+     harness runs with no Redis.
 4. **Deposits still change hands in cash.** Nothing on the platform holds,
    escrows or settles one — the UI now says so at every point (see below),
    but if a renter never gets their deposit back the only recourse is the

@@ -68,7 +68,11 @@ const start = async () => {
     console.log(`Campus Connect server running on port ${PORT}`);
   });
 
-  scheduleBackgroundJobs();
+  // Not under test. The end-to-end harness (client/tests/e2e) boots this
+  // whole server against a throwaway database and no Redis at all, and four
+  // Bull queues retrying a broker that is not there adds nothing but churn
+  // to every run. Nothing in the tested paths depends on them.
+  if (process.env.NODE_ENV !== 'test') scheduleBackgroundJobs();
 };
 
 start().catch((err) => {
