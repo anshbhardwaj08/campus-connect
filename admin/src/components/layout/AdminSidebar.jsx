@@ -3,6 +3,11 @@
 // client's masthead is a fixture rather than a Panel (see client/src/
 // components/layout/Navbar.jsx). Crimson budget here is the Wordmark and
 // the active nav item's bar; nothing else in this rail takes the accent.
+//
+// Below lg the rail would eat most of a phone screen, so it collapses: a
+// slim ink bar with a menu button takes its place (AdminWrapper), and the
+// same contents open as a drawer over the page.
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -16,6 +21,7 @@ import {
   Megaphone,
   ScrollText,
   LogOut,
+  X,
 } from 'lucide-react';
 
 import { useAdminAuth } from '../../hooks/useAdminAuth';
@@ -23,6 +29,7 @@ import { useAdminSignOut } from '../../hooks/useAdminSignOut';
 import Wordmark from '../ui/Wordmark';
 import Avatar from '../ui/Avatar';
 import Badge from '../ui/Badge';
+import { gsap, panelWipe } from '../../lib/motion';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -44,18 +51,78 @@ const linkClass = ({ isActive }) =>
       : 'border-transparent text-paper-3/60 hover:text-paper-3'
   }`;
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ open = false, onClose }) {
+  return (
+    <>
+      {/* `sticky top-0` with a full-viewport height: the rail is navigation,
+          so it stays put while the page behind it scrolls. Without this the
+          whole column scrolls away with the content and you have to scroll
+          back up to change page. */}
+      <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col border-r-[3px] border-ink bg-ink lg:flex">
+        <SidebarContents />
+      </aside>
+
+      {open && <Drawer onClose={onClose} />}
+    </>
+  );
+}
+
+function Drawer({ onClose }) {
+  const sheet = useRef(null);
+
+  useLayoutEffect(() => {
+    if (!sheet.current) return;
+    const ctx = gsap.context(() => panelWipe(sheet.current, { stagger: 0 }), sheet);
+    return () => ctx.revert();
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose?.();
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  return (
+    <div className="screen-coarse fixed inset-0 z-50 bg-ink/60 lg:hidden" onClick={onClose}>
+      <aside
+        ref={sheet}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+        onClick={(e) => e.stopPropagation()}
+        className="flex h-full w-[248px] max-w-[85vw] flex-col border-r-[3px] border-ink bg-ink"
+      >
+        <SidebarContents onClose={onClose} />
+      </aside>
+    </div>
+  );
+}
+
+// `onClose` is only passed inside the drawer: it adds the close button.
+// Picking a page closes the drawer from AdminWrapper, which watches the
+// route, so the links themselves need nothing extra.
+function SidebarContents({ onClose }) {
   const { user } = useAdminAuth();
   const signOut = useAdminSignOut();
 
   return (
-    // `sticky top-0` with a full-viewport height: the rail is navigation, so
-    // it stays put while the page behind it scrolls. Without this the whole
-    // column scrolls away with the content and you have to scroll back up to
-    // change page.
-    <aside className="sticky top-0 flex h-screen w-[248px] shrink-0 flex-col border-r-[3px] border-ink bg-ink">
-      <div className="flex items-center gap-2 border-b-2 border-paper-3/10 px-4 py-5">
+    <>
+      <div className="flex items-center justify-between gap-2 border-b-2 border-paper-3/10 px-4 py-5">
         <Wordmark size="sm" tone="paper" to="/" />
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close menu"
+            className="flex h-9 w-9 items-center justify-center border-2 border-paper-3/40 text-paper-3 transition-colors hover:border-paper-3"
+          >
+            <X className="h-4 w-4" strokeWidth={2.5} />
+          </button>
+        )}
       </div>
 
       <div className="border-b-2 border-paper-3/10 px-4 py-3">
@@ -93,6 +160,6 @@ export default function AdminSidebar() {
           Sign out
         </button>
       </div>
-    </aside>
+    </>
   );
 }

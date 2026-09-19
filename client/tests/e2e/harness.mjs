@@ -25,6 +25,7 @@ import net from 'node:net';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT = path.resolve(HERE, '..', '..');
 const SERVER = path.resolve(CLIENT, '..', 'server');
+const ADMIN_APP = path.resolve(CLIENT, '..', 'admin');
 
 // mongodb-memory-server and mongoose are the server's dependencies, not the
 // client's — required from where they actually live rather than installed
@@ -43,6 +44,9 @@ export const API_PORT = 5055;
 export const WEB_PORT = 5199;
 export const API = `http://localhost:${API_PORT}`;
 export const WEB = `http://localhost:${WEB_PORT}`;
+// The API's ADMIN_URL below is this origin, so CORS lets the admin app in.
+export const ADMIN_PORT = WEB_PORT + 1;
+export const ADMIN = `http://localhost:${ADMIN_PORT}`;
 
 const CHROME_CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -58,7 +62,11 @@ const CHROME_CANDIDATES = [
 // system temp directory does not.
 const DB_ROOT = process.env.TEST_DB_PATH || path.join(SERVER, '.test-db');
 
-const state = { mongod: null, api: null, web: null, browser: null, dbPath: null };
+// The throwaway API's signing secret. Exported so a test can mint a socket
+// token for a seeded user without going through the login form.
+export const ACCESS_SECRET = 'e2e-access-secret-not-used-anywhere-real';
+
+const state = { mongod: null, api: null, web: null, admin: null, browser: null, dbPath: null };
 
 const waitFor = async (probe, what, timeoutMs = 60000) => {
   const deadline = Date.now() + timeoutMs;
@@ -90,10 +98,10 @@ const startApi = async (mongoUri) => {
       NODE_ENV: 'test', // rate limiters off, logs quiet, no job queues
       PORT: String(API_PORT),
       MONGO_URI: mongoUri,
-      JWT_ACCESS_SECRET: 'e2e-access-secret-not-used-anywhere-real',
+      JWT_ACCESS_SECRET: ACCESS_SECRET,
       JWT_REFRESH_SECRET: 'e2e-refresh-secret-not-used-anywhere-real',
       CLIENT_URL: WEB,
-      ADMIN_URL: `http://localhost:${WEB_PORT + 1}`,
+      ADMIN_URL: ADMIN,
       COLLEGE_EMAIL_DOMAINS: 'pec.edu.in',
       // A closed port, so a send fails instantly instead of hanging on
       // nodemailer's two-minute connect timeout. No mail leaves the machine.
@@ -119,18 +127,18 @@ const startApi = async (mongoUri) => {
   await waitFor(async () => (await fetch(`${API}/api/v1/health`)).ok, 'the API');
 };
 
-const startWeb = async () => {
-  // --mode e2e picks up client/.env.e2e, which points the app at the API
-  // above. The developer's own .env is left alone.
-  state.web = spawn(
+// --mode e2e picks up each app's .env.e2e, which points it at the API above.
+// The developer's own .env is left alone.
+const startVite = async (cwd, port, tag) => {
+  const child = spawn(
     process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    ['vite', '--mode', 'e2e', '--port', String(WEB_PORT), '--strictPort'],
-    { cwd: CLIENT, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32' }
+    ['vite', '--mode', 'e2e', '--port', String(port), '--strictPort'],
+    { cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32' }
   );
-  state.web.stdout.on('data', () => {});
-  state.web.stderr.on('data', (d) => console.error('[vite]', String(d).trim()));
-
-  await waitFor(async () => (await fetch(WEB)).ok, 'the dev server');
+  child.stdout.on('data', () => {});
+  child.stderr.on('data', (d) => console.error(`[${tag}]`, String(d).trim()));
+  await waitFor(async () => (await fetch(`http://localhost:${port}`)).ok, `the ${tag} dev server`);
+  return child;
 };
 
 // Something already listening on our ports is a server this run did not
@@ -147,12 +155,16 @@ const assertPortFree = (port) =>
     probe.listen(port);
   });
 
-export const startStack = async () => {
+// `admin: true` also starts the admin app. Off by default: the student-side
+// tests do not need a second vite server's worth of startup time.
+export const startStack = async ({ admin = false } = {}) => {
   await assertPortFree(API_PORT);
   await assertPortFree(WEB_PORT);
+  if (admin) await assertPortFree(ADMIN_PORT);
   const uri = await startMongo();
   await startApi(uri);
-  await startWeb();
+  state.web = await startVite(CLIENT, WEB_PORT, 'vite');
+  if (admin) state.admin = await startVite(ADMIN_APP, ADMIN_PORT, 'admin vite');
 
   const executablePath = CHROME_CANDIDATES.find((p) => p && fs.existsSync(p));
   if (!executablePath) throw new Error('No Chrome or Edge found');
@@ -165,7 +177,7 @@ export const startStack = async () => {
 
 export const stopStack = async () => {
   await state.browser?.close();
-  for (const child of [state.web, state.api]) {
+  for (const child of [state.admin, state.web, state.api]) {
     if (!child) continue;
     // The vite process spawns its own child on Windows; killing the tree is
     // what actually frees the port.
@@ -224,7 +236,7 @@ export const openTab = async ({ collectErrors = true } = {}) => {
   page.errors = errors;
   page.failures = failures;
   page.go = async (route) => {
-    await page.goto(WEB + route, { waitUntil: 'networkidle2' });
+    await page.goto((route.startsWith('http') ? '' : WEB) + route, { waitUntil: 'networkidle2' });
     // Routes are lazy chunks now; the fallback is the only thing that sets
     // aria-busy, so waiting for it to clear waits for the real page.
     await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'), { timeout: 20000 });

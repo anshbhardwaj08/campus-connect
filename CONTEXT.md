@@ -784,7 +784,17 @@ re-run it hit a real user's event (3 RSVPs) instead of a demo one.
 records by row position in a test against a database that holds real data**
 — match on an exact identifier the test itself created.
 
-### Demo content lives in the database on purpose (2026-09-15)
+### Demo students deleted (2026-09-19)
+The six demo students below, and everything tied to them (9 listings, 4
+conversations, 2 messages, 3 deals, 7 notifications, 4 reports and their 2
+events), were deleted from the live database before the first deploy. Every
+deleted document was written first to
+`E:\collegeolx-backups\demo-students-2026-09-19.json` (Extended JSON, outside
+the repo), so it can be restored. `moderator.demo@pec.edu.in` was **kept** on
+purpose. `Test Student` and `Reset Test` (resettest@example.invalid) are
+leftover test accounts that were not part of this and are still there.
+
+### Demo content lives in the database on purpose (2026-09-15) — superseded above
 Six demo students (Priya Sharma, Rohan Mehta, Ananya Iyer, Karan Singh,
 Simran Kaur, Vikram Rao — all `@pec.edu.in`), their
 listings, two events, two open reports, two scam-flagged pending listings
@@ -1405,13 +1415,21 @@ tests behind it. Worth doing deliberately, not as a side effect of this.
 **The student-facing product loop is closed end to end, and every screen in
 both apps is built.** No stubs remain in `/admin`. What is left:
 
-1. **Before deploying:** delete `moderator.demo@pec.edu.in` (or change its
-   password) and decide what to do with the demo students and their
-   listings.
+1. **Chat sockets were wide open, fixed 2026-09-19.** `sockets/events.js`
+   trusted the conversation id it was sent: any signed-in student could join
+   a stranger's room and read it live, post or offer into it, or set its deal
+   status. Every conversation event now goes through `findOwnConversation`;
+   message and offer bodies go through `utils/chatMessage.js` (shared with
+   the REST send path); `listing:priceUpdate`, an open broadcast nothing
+   listened to, is gone. `conversation:join` takes an optional ack. Covered
+   by `client/tests/e2e/chat-security.test.mjs` (fails with the check
+   removed) and `server/tests/unit/chatMessage.test.js`. One message in the
+   live data (prithvi, in an Ansh <-> Gopal thread) was posted this way
+   before the fix; it was left in place.
 2. **The client entry still carries `socket.io-client`** (~30 kB gzipped)
    for signed-out visitors. See the end of the code-splitting section above
    for why it was left and what deferring it costs.
-3. **The admin app has no end-to-end tests yet.** `client/tests/e2e`
+3. **The admin app has only a layout test.** `client/tests/e2e`
    boots its own stack (in-memory mongod on a throwaway dbPath ->
    `server.js` on 5055 -> vite `--mode e2e` on 5199 -> headless Chrome) and
    never touches Atlas or the dev servers. Run it with
@@ -1426,8 +1444,14 @@ both apps is built.** No stubs remain in `/admin`. What is left:
      actually click, at desktop width and at phone width, from a page that
      is not Home. It never opens a destination by URL, so a link that exists
      at only one screen size fails.
-   Next: the same harness pointed at `/admin` (the moderation queue is the
-   obvious first flow), then the rent path through `RentalLengthModal`.
+   - `admin-layout.test.mjs`: the admin sidebar is a rail at desktop width
+     and a drawer behind a menu button below `lg`. The drawer opens, and
+     closes on a link, on Escape, on the scrim and on its close button,
+     and the phone page does not scroll sideways. `startStack({ admin: true })`
+     also boots the admin app on 5200 (`admin/.env.e2e`); the API's
+     ADMIN_URL already points there, so CORS lets it in.
+   Next: an admin flow (the moderation queue: student reports -> moderator
+   acts), then the rent path through `RentalLengthModal`.
    Notes a cold reader would trip on:
    - `page.errors` drops Chrome's "Failed to load resource" lines; failed
      API calls land in `page.failures` instead, with the URL. The only 4xx
@@ -1451,6 +1475,11 @@ both apps is built.** No stubs remain in `/admin`. What is left:
      modal button hits the scrim, which closes the modal. That was the deal
      test's one-in-five flake. Call `waitForDialog` before typing into a
      modal.
+   - Toasts sit top-right, over the masthead's buttons. Both Toasters set
+     `mobileOffset` as well as `offset`: sonner reads `mobileOffset` below
+     600px, and without it the sign-in toast covered the admin menu button
+     (the only way to change page on a phone) for four seconds. The admin
+     layout test taps that button while the toast is still up.
    - `startStack` refuses to run if 5055 or 5199 is already taken, and
      `stopStack` waits for the kill to finish. Without both, a run could
      silently test the previous run's still-dying servers.
@@ -1459,10 +1488,7 @@ both apps is built.** No stubs remain in `/admin`. What is left:
    sending anyone there, and nothing reads `isPhoneVerified`. Either wire
    it in after email verification (and decide what it gates), or delete the
    page and the route. A product decision, so left as is.
-5. **The admin sidebar never collapses.** It is a fixed 248px column, so
-   the admin app is unusable on a phone. Fine if moderators work at a desk;
-   worth a drawer if they don't.
-6. **Deposits still change hands in cash.** Nothing on the platform holds,
+5. **Deposits still change hands in cash.** Nothing on the platform holds,
    escrows or settles one — the UI now says so at every point (see below),
    but if a renter never gets their deposit back the only recourse is the
    dispute button and a moderator. That is the same as a sale going wrong,

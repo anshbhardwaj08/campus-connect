@@ -29,7 +29,10 @@ function App() {
           {/* Do NOT pass `unstyled: true` here — it drops sonner's
               [data-styled] rule and the toast collapses to nothing. See
               client/src/App.jsx and index.css "Toasts". */}
-          <Toaster position="top-right" duration={4000} closeButton />
+          {/* Below 600px sonner uses mobileOffset, not offset. Without it a
+              toast sits on the phone top bar and covers the menu button —
+              the only way to change page — for its four seconds. */}
+          <Toaster position="top-right" duration={4000} closeButton mobileOffset={{ top: 72 }} />
         </BrowserRouter>
       </QueryClientProvider>
     </Provider>

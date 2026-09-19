@@ -51,7 +51,16 @@ function App() {
               directly over the chat, bell and avatar controls and swallow
               clicks aimed at them for as long as the toast is up — the
               buttons look fine and simply do not respond. */}
-          <Toaster position="top-right" duration={4000} closeButton offset={{ top: 80 }} />
+          {/* Both offsets clear the 64px masthead. Below 600px sonner reads
+              mobileOffset instead of offset; without it, a toast on a phone
+              covers the menu, chat and account buttons. */}
+          <Toaster
+            position="top-right"
+            duration={4000}
+            closeButton
+            offset={{ top: 80 }}
+            mobileOffset={{ top: 80 }}
+          />
         </BrowserRouter>
       </QueryClientProvider>
     </Provider>

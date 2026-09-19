@@ -3,7 +3,7 @@
 // sidebar doesn't have to duplicate "where am I" as well as "where can I go".
 export default function AdminNavbar({ title, blurb, actions }) {
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b-[3px] border-ink bg-paper px-6 py-4">
+    <header className="sticky top-14 z-30 flex flex-wrap items-center justify-between gap-4 border-b-[3px] border-ink bg-paper px-4 py-4 sm:px-6 lg:top-0">
       <div className="min-w-0">
         <h1 className="truncate font-display text-[26px] leading-none tracking-[.01em] text-ink">
           {title}

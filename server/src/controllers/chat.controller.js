@@ -9,6 +9,7 @@ const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const { paginate, buildPagination } = require('../utils/paginate');
+const { parseMessage } = require('../utils/chatMessage');
 
 // GET /chat/conversations
 const getConversations = catchAsync(async (req, res) => {
@@ -146,15 +147,17 @@ const sendMessage = catchAsync(async (req, res) => {
     throw new ApiError(403, 'Not a participant of this conversation');
   }
 
+  // Same rules as the socket path (utils/chatMessage.js).
+  const { value, error } = parseMessage({ text, imageUrl, type });
+  if (error) throw new ApiError(400, error);
+
   const message = await Message.create({
     conversationId: id,
     senderId: req.user._id,
-    text,
-    imageUrl,
-    type,
+    ...value,
   });
 
-  conversation.lastMessage = type === 'text' ? text : `[${type}]`;
+  conversation.lastMessage = value.type === 'text' ? value.text : `[${value.type}]`;
   conversation.lastMessageAt = new Date();
   await conversation.save();
 
