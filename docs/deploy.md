@@ -64,6 +64,20 @@ Render service.
 do not run: expiring old listings, rental due-date reminders and saved-search
 alerts. Render's free Key Value store, or Upstash, can provide one.
 
+## Redis connections
+
+The free Redis Cloud plan allows about 30 connections at once. The server
+opens 7 (one for OTPs; Bull shares two between its four queues and needs one
+more per queue). During a deploy the old and new instances overlap, so count
+14. **Don't point a local dev server at the production Redis.** Its 7 more
+connections is how the limit was first hit. Leave `REDIS_URL` out of your
+local `.env`, or use a separate free database.
+
+If the limit is hit anyway, the site keeps serving. The background jobs pause
+and retry at most every 30 seconds, and the log says
+`Queue … unavailable: ERR max number of clients reached`. The password is
+never printed.
+
 ## Things to know about the free plan
 
 - **It sleeps after 15 minutes with no visitors.** The next visit takes

@@ -47,6 +47,14 @@ const scheduleBackgroundJobs = () => {
   });
 };
 
+// Last line of defence. Node exits on a promise rejection nobody handled, and
+// a Redis hiccup in some background path is not a reason to take the whole
+// site down. Only the message is logged: an ioredis error carries the command
+// that failed, and for AUTH that includes the Redis password.
+process.on('unhandledRejection', (reason) => {
+  console.error(`Unhandled rejection: ${reason?.message || reason}`);
+});
+
 const start = async () => {
   // The database IS on the request path, so this one is still awaited.
   await connectDB();
