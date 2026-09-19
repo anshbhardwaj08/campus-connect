@@ -3,7 +3,7 @@
 The whole product deploys as **one Render web service**. In production the
 API server also serves the built student app at `/` and the built admin panel
 at `/admin`, so everything lives on one address, e.g.
-`https://campus-connect.onrender.com`.
+`https://campus-connect-94sq.onrender.com`.
 
 ## Why one service
 
@@ -25,7 +25,7 @@ Render service.
 |---|---|
 | `package.json` (root) | `npm run build` installs all three parts and builds both apps; `npm start` starts the server |
 | `render.yaml` | Render Blueprint: service settings, and the list of env vars to fill in |
-| `server/src/app.js` | In production: serves `client/dist` at `/` and `admin/dist` at `/admin` with a refresh-safe fallback; `trust proxy` so the rate limiter sees each student's own address; a Content-Security-Policy that allows Google Fonts and Cloudinary |
+| `server/src/app.js` | In production: serves `client/dist` at `/` and `admin/dist` at `/admin` with a refresh-safe fallback; `trust proxy` so the rate limiter sees each student's own address; a Content-Security-Policy that allows Google Fonts and https images (avatars can be any image link) |
 | `client/.env.production`, `admin/.env.production` | Build-time settings: a relative API path, and no socket URL (same origin) |
 | `admin/vite.config.js` | The admin build lives under `/admin/` |
 
@@ -51,8 +51,8 @@ Render service.
 2. **New → Blueprint**, then pick this repository. Render reads `render.yaml`.
 3. It asks for every value marked `sync: false`. Copy them from `server/.env`,
    except:
-   - `CLIENT_URL`: `https://campus-connect.onrender.com`
-   - `ADMIN_URL`: `https://campus-connect.onrender.com/admin`
+   - `CLIENT_URL`: `https://campus-connect-94sq.onrender.com`
+   - `ADMIN_URL`: `https://campus-connect-94sq.onrender.com/admin`
 
    If Render gives the service a different address (the name is taken, so it
    adds a suffix), change both to the real address afterwards under

@@ -46,14 +46,19 @@ app.use(
   })
 );
 // helmet's default Content-Security-Policy, widened only for what the two
-// apps actually load: Google Fonts (Bangers, Work Sans), listing photos from
-// Cloudinary, and blob: for the photo previews on the post form. Everything
-// else — scripts, sockets, API calls — is same-origin.
+// apps actually load: Google Fonts (Bangers, Work Sans), images, and blob:
+// for the photo previews on the post form. Everything else — scripts,
+// sockets, API calls — is same-origin.
+//
+// Images are any https source, not just Cloudinary: Settings lets a student
+// set their avatar to any image link, and a Cloudinary-only policy blanked
+// those on the live site (a real account's avatar was hosted elsewhere).
+// An image cannot run code, so this is the one directive safe to open.
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
-        'img-src': ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com'],
+        'img-src': ["'self'", 'data:', 'blob:', 'https:'],
         'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com'],
       },
