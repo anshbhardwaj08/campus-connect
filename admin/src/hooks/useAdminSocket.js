@@ -17,7 +17,8 @@ export const useAdminSocket = () => {
   useEffect(() => {
     if (!isAuthenticated) return undefined;
 
-    const connection = io(import.meta.env.VITE_SOCKET_URL, { withCredentials: true });
+    // Empty in production: same origin as the API (see .env.production).
+    const connection = io(import.meta.env.VITE_SOCKET_URL || undefined, { withCredentials: true });
     setSocket(connection);
 
     return () => {

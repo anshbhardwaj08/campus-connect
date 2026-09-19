@@ -1,0 +1,12 @@
+{
+  "name": "campus-connect",
+  "private": true,
+  "description": "Deploys as one service: the API also serves the student app at / and the admin panel at /admin. See docs/deploy.md.",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "build": "npm ci --prefix server --omit=dev && npm ci --prefix client --include=dev && npm ci --prefix admin --include=dev && npm run build --prefix client && npm run build --prefix admin",
+    "start": "npm start --prefix server"
+  }
+}

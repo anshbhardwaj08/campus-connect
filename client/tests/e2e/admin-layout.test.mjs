@@ -4,7 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { startStack, stopStack, openTab, makeUser, waitForDialog, ADMIN, PASSWORD } from './harness.mjs';
+import { startStack, stopStack, openTab, makeUser, waitForDialog, tap, ADMIN, PASSWORD } from './harness.mjs';
 
 before(() => startStack({ admin: true }), { timeout: 240000 });
 after(stopStack);
@@ -60,7 +60,7 @@ test('phone: the rail collapses into a drawer', async (t) => {
   await signInAdmin(page, mod);
 
   const openMenu = async () => {
-    await page.click('button[aria-label="Open menu"]');
+    await tap(page, 'button[aria-label="Open menu"]');
     await waitForDialog(page);
   };
 

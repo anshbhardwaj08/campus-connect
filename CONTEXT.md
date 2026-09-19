@@ -1410,6 +1410,22 @@ tests behind it. Worth doing deliberately, not as a side effect of this.
 
 ---
 
+## Deployment (2026-09-19)
+One Render web service runs everything: the API serves `client/dist` at `/`
+and `admin/dist` at `/admin` when `NODE_ENV=production`. **The full guide is
+`docs/deploy.md`**; read it before touching cookies, CORS, `app.js` static
+serving, or the admin base path. In short:
+- One origin because there is no custom domain. Two `*.onrender.com` (or
+  `*.vercel.app`) hosts are different sites, and the `lax` login cookie is
+  not sent across sites. `none` would break Safari and iPhones.
+- `trust proxy` is on in production (`TRUST_PROXY`, default 1). Without it
+  the rate limiter sees one address for every student.
+- The admin build uses base `/admin/` and a router basename. Dev and e2e
+  still run it at `/` on its own port.
+- `cd client && npm run test:prod` builds both apps and runs
+  `tests/prod/production.test.mjs` against the production-mode server. The
+  proxy test fails with `TRUST_PROXY=0`, as it should.
+
 ## Next up
 
 **The student-facing product loop is closed end to end, and every screen in

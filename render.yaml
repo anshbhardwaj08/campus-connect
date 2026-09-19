@@ -1,0 +1,49 @@
+# Render Blueprint: one web service runs everything (see docs/deploy.md).
+# New > Blueprint in the Render dashboard, pick this repo. Every value marked
+# `sync: false` is asked for once, in the dashboard — none are stored here.
+services:
+  - type: web
+    name: campus-connect
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: COLLEGE_EMAIL_DOMAINS
+        value: pec.edu.in
+      - key: JWT_ACCESS_EXPIRY
+        value: 15m
+      - key: JWT_REFRESH_EXPIRY
+        value: 7d
+      # The service's own address, e.g. https://campus-connect.onrender.com
+      # — known only after the first deploy. Email links are built from it.
+      - key: CLIENT_URL
+        sync: false
+      - key: ADMIN_URL
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: NODEMAILER_USER
+        sync: false
+      - key: NODEMAILER_PASS
+        sync: false
+      # Optional: background jobs only (listing expiry, rental reminders,
+      # saved-search alerts). The site works without it.
+      - key: REDIS_URL
+        sync: false

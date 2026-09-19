@@ -5,7 +5,9 @@ let socket = null;
 export const connectSocket = (token) => {
   if (socket?.connected) return socket;
 
-  socket = io(import.meta.env.VITE_SOCKET_URL, {
+  // Empty in production (.env.production): the API and this app share one
+  // origin, and io() with no URL connects back to the page's own host.
+  socket = io(import.meta.env.VITE_SOCKET_URL || undefined, {
     auth: { token },
     withCredentials: true,
     autoConnect: true,

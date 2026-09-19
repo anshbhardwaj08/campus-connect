@@ -66,7 +66,9 @@ const DB_ROOT = process.env.TEST_DB_PATH || path.join(SERVER, '.test-db');
 // token for a seeded user without going through the login form.
 export const ACCESS_SECRET = 'e2e-access-secret-not-used-anywhere-real';
 
-const state = { mongod: null, api: null, web: null, admin: null, browser: null, dbPath: null };
+// `base` is where relative routes in page.go() resolve: the vite dev server
+// normally, the API's own origin in production mode.
+const state = { mongod: null, api: null, web: null, admin: null, browser: null, dbPath: null, base: WEB };
 
 const waitFor = async (probe, what, timeoutMs = 60000) => {
   const deadline = Date.now() + timeoutMs;
@@ -84,13 +86,15 @@ const waitFor = async (probe, what, timeoutMs = 60000) => {
 const startMongo = async () => {
   state.dbPath = path.join(DB_ROOT, 'e2e-' + crypto.randomBytes(5).toString('hex'));
   fs.mkdirSync(state.dbPath, { recursive: true });
-  state.mongod = await MongoMemoryServer.create({ instance: { dbPath: state.dbPath } });
+  // launchTimeout: the library's 10s default is not always enough on this
+  // machine right after a build, and a slow start is not a test failure.
+  state.mongod = await MongoMemoryServer.create({ instance: { dbPath: state.dbPath, launchTimeout: 60000 } });
   const uri = state.mongod.getUri('collegeolx-e2e');
   await mongoose.connect(uri);
   return uri;
 };
 
-const startApi = async (mongoUri) => {
+const startApi = async (mongoUri, overrides = {}) => {
   state.api = spawn(process.execPath, ['server.js'], {
     cwd: SERVER,
     env: {
@@ -113,6 +117,7 @@ const startApi = async (mongoUri) => {
       CLOUDINARY_CLOUD_NAME: 'test',
       CLOUDINARY_API_KEY: 'test',
       CLOUDINARY_API_SECRET: 'test',
+      ...overrides,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -157,14 +162,24 @@ const assertPortFree = (port) =>
 
 // `admin: true` also starts the admin app. Off by default: the student-side
 // tests do not need a second vite server's worth of startup time.
-export const startStack = async ({ admin = false } = {}) => {
+//
+// `production: true` runs the deployed shape instead: no vite at all, and
+// server.js in production mode serving the BUILT apps itself — the student
+// app at API/, the admin panel at API/admin. Build both first (npm run
+// test:prod does). Rate limiters are live in this mode.
+export const startStack = async ({ admin = false, production = false } = {}) => {
   await assertPortFree(API_PORT);
-  await assertPortFree(WEB_PORT);
-  if (admin) await assertPortFree(ADMIN_PORT);
+  if (!production) await assertPortFree(WEB_PORT);
+  if (admin && !production) await assertPortFree(ADMIN_PORT);
+  state.base = production ? API : WEB;
   const uri = await startMongo();
-  await startApi(uri);
-  state.web = await startVite(CLIENT, WEB_PORT, 'vite');
-  if (admin) state.admin = await startVite(ADMIN_APP, ADMIN_PORT, 'admin vite');
+  if (production) {
+    await startApi(uri, { NODE_ENV: 'production', CLIENT_URL: API, ADMIN_URL: `${API}/admin` });
+  } else {
+    await startApi(uri);
+    state.web = await startVite(CLIENT, WEB_PORT, 'vite');
+    if (admin) state.admin = await startVite(ADMIN_APP, ADMIN_PORT, 'admin vite');
+  }
 
   const executablePath = CHROME_CANDIDATES.find((p) => p && fs.existsSync(p));
   if (!executablePath) throw new Error('No Chrome or Edge found');
@@ -236,7 +251,7 @@ export const openTab = async ({ collectErrors = true } = {}) => {
   page.errors = errors;
   page.failures = failures;
   page.go = async (route) => {
-    await page.goto((route.startsWith('http') ? '' : WEB) + route, { waitUntil: 'networkidle2' });
+    await page.goto((route.startsWith('http') ? '' : state.base) + route, { waitUntil: 'networkidle2' });
     // Routes are lazy chunks now; the fallback is the only thing that sets
     // aria-busy, so waiting for it to clear waits for the real page.
     await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'), { timeout: 20000 });
@@ -344,6 +359,26 @@ export const press = async (page, label, { timeout = 20000 } = {}) => {
     label
   );
   await button.asElement().click();
+};
+
+// `press` for an element found by selector rather than label — icon buttons
+// like the menu button have no text. Same rule: click only once a tap would
+// land on it. A toast sliding in from the top edge passes over the phone
+// top bar on its way down, and a tap in that moment hits the toast.
+export const tap = async (page, selector, { timeout = 20000 } = {}) => {
+  const el = await page.waitForFunction(
+    (sel) =>
+      [...document.querySelectorAll(sel)].find((b) => {
+        if (b.disabled || !b.checkVisibility({ visibilityProperty: true })) return false;
+        b.scrollIntoView({ block: 'center', inline: 'center' });
+        const r = b.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return hit && b.contains(hit);
+      }) || null,
+    { timeout },
+    selector
+  );
+  await el.asElement().click();
 };
 
 // Waits until the open dialog has finished its opening wipe: all four

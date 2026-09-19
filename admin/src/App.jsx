@@ -22,7 +22,8 @@ function App() {
   return (
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
+        {/* BASE_URL is /admin/ in the build and / in dev (vite.config.js). */}
+        <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
           <AdminSession />
           <AdminRoutes />
 

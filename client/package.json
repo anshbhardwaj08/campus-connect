@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "check:ui": "node scripts/check-ui.cjs",
-    "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.test.mjs\""
+    "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.test.mjs\"",
+    "test:prod": "npm run build && npm run build --prefix ../admin && node --test --test-concurrency=1 \"tests/prod/*.test.mjs\""
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
