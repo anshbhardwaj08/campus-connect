@@ -38,6 +38,40 @@ const getConversations = catchAsync(async (req, res) => {
     c.unreadCount = byId.get(String(c._id)) || 0;
   });
 
+  // `subjectState` is what the thread needs to decide which handshake button
+  // to show: who owns the post, whether it is still open, how many seats are
+  // left. One query per kind, not per conversation.
+  const community = conversations.filter((c) => c.subject && c.subject.kind !== 'listing');
+  const byKind = community.reduce((acc, c) => {
+    (acc[c.subject.kind] = acc[c.subject.kind] || []).push(c.subject.refId);
+    return acc;
+  }, {});
+
+  const states = new Map();
+  await Promise.all(
+    Object.entries(byKind).map(async ([kind, ids]) => {
+      const config = SUBJECTS[kind];
+      if (!config) return;
+      const posts = await config.model
+        .find({ _id: { $in: ids } })
+        .select('userId status seatsAvailable')
+        .lean();
+      posts.forEach((post) => {
+        states.set(String(post._id), {
+          ownerId: post.userId,
+          status: post.status,
+          ...(post.seatsAvailable !== undefined && { seatsAvailable: post.seatsAvailable }),
+        });
+      });
+    })
+  );
+
+  community.forEach((c) => {
+    // A missing post means it was deleted: the thread stays readable, and
+    // `null` tells the client there is nothing left to claim.
+    c.subjectState = states.get(String(c.subject.refId)) || null;
+  });
+
   return res.status(200).json(new ApiResponse(200, { conversations }, 'Conversations fetched'));
 });
 

@@ -19,6 +19,8 @@ const createEventSchema = Joi.object({
   category: Joi.string().trim().max(60).allow(''),
   isFree: Joi.boolean(),
   ticketPrice: Joi.number().min(0),
+  // Optional: most campus events are "turn up". A number here caps the list.
+  capacity: Joi.number().integer().min(1).max(100000),
 });
 
 const createLostFoundSchema = Joi.object({

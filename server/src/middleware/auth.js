@@ -49,4 +49,21 @@ const verifyRefreshToken = catchAsync(async (req, res, next) => {
   next();
 });
 
-module.exports = { verifyAccessToken, verifyRefreshToken };
+// Reads the session if there is one and carries on either way. For pages
+// that are public but say something extra to whoever is signed in — the
+// events board has to answer "are YOU going?" without shutting visitors out,
+// and without handing the whole attendee list to anyone who asks.
+const attachUserIfSignedIn = async (req, res, next) => {
+  const token = req.cookies?.accessToken;
+  if (!token) return next();
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+    const user = await User.findById(decoded.userId).select('-passwordHash');
+    if (user && !user.isBlocked) req.user = user;
+  } catch {
+    /* an expired or bogus token just means "not signed in" here */
+  }
+  return next();
+};
+
+module.exports = { verifyAccessToken, verifyRefreshToken, attachUserIfSignedIn };

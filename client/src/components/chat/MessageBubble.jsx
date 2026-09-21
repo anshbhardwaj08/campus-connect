@@ -6,12 +6,40 @@
 import { Check, CheckCheck, Flag } from 'lucide-react';
 
 import OfferCard from './OfferCard';
+import ClaimCard from './ClaimCard';
 
 const timeOf = (iso) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-export default function MessageBubble({ message, isMine, onAcceptOffer, canAcceptOffer, onReport }) {
-  const { text, imageUrl, type, offerAmount, createdAt, readAt } = message;
+export default function MessageBubble({
+  message,
+  isMine,
+  onAcceptOffer,
+  canAcceptOffer,
+  onDecideClaim,
+  canDecideClaim,
+  claimBusy,
+  onReport,
+}) {
+  const { text, imageUrl, type, offerAmount, claim, createdAt, readAt } = message;
+
+  // A claim on a community post: "I have your wallet", "I want a seat".
+  if (type === 'claim') {
+    return (
+      <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+        <div className="max-w-[78%]">
+          <ClaimCard
+            claim={claim}
+            isMine={isMine}
+            canDecide={canDecideClaim && !isMine}
+            busy={claimBusy}
+            onDecide={(action) => onDecideClaim?.(message, action)}
+          />
+          <MetaRow at={createdAt} readAt={readAt} isMine={isMine} />
+        </div>
+      </div>
+    );
+  }
 
   // Offers are a decision, not a remark — they get a panel, not a bubble.
   if (type === 'offer') {

@@ -14,7 +14,15 @@ import Textarea from '../../components/ui/Textarea';
 import Button from '../../components/ui/Button';
 import ImagePicker from '../../components/listing/ImagePicker';
 
-const BLANK = { title: '', description: '', date: '', location: '', category: '', ticketPrice: '' };
+const BLANK = {
+  title: '',
+  description: '',
+  date: '',
+  location: '',
+  category: '',
+  ticketPrice: '',
+  capacity: '',
+};
 
 export default function Events() {
   const { user, isAuthenticated } = useAuth();
@@ -66,13 +74,24 @@ export default function Events() {
     if (ok) removeEvent.mutate(event);
   };
 
+  // The server answers with the event as it now stands, so the message says
+  // what actually happened — "already going" is not a failure.
   const rsvp = useMutation({
     mutationFn: (event) => api.patch(`/events/${event._id}/rsvp`),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      toast.success(res.data.message);
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Could not put you down for that.')),
+  });
+
+  const cancelRsvp = useMutation({
+    mutationFn: (event) => api.delete(`/events/${event._id}/rsvp`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
-      toast.success('You are down as going.');
+      toast.success('Taken off the list.');
     },
-    onError: (err) => toast.error(apiErrorMessage(err, 'Could not RSVP.')),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Could not take you off the list.')),
   });
 
   const submit = () => {
@@ -108,8 +127,9 @@ export default function Events() {
               index={Math.min(i, 10)}
               currentUserId={user?._id}
               onRsvp={(e) => rsvp.mutate(e)}
+              onCancelRsvp={(e) => cancelRsvp.mutate(e)}
               onDelete={confirmRemove}
-              busy={rsvp.isPending || removeEvent.isPending}
+              busy={rsvp.isPending || cancelRsvp.isPending || removeEvent.isPending}
             />
           </div>
         ))}
@@ -138,6 +158,16 @@ export default function Events() {
               onChange={set('ticketPrice')}
             />
           </div>
+
+          <Input
+            label="Room for how many"
+            type="number"
+            min="1"
+            placeholder="Leave empty for no limit"
+            hint="Once this many are going, the event shows as full."
+            value={form.capacity}
+            onChange={set('capacity')}
+          />
 
           <ImagePicker
             files={image}

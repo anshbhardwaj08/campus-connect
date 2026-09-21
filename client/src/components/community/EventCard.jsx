@@ -9,8 +9,29 @@ import Button from '../ui/Button';
 import formatPrice from '../../utils/formatPrice';
 import { formatDateTime, whenRelative } from '../../utils/formatDate';
 
-export default function EventCard({ event, index = 0, currentUserId, onRsvp, onDelete, busy = false }) {
-  const { title, description, date, location, isFree, ticketPrice, rsvpCount, imageUrl, category, organizerId: organizer } = event;
+export default function EventCard({
+  event,
+  index = 0,
+  currentUserId,
+  onRsvp,
+  onCancelRsvp,
+  onDelete,
+  busy = false,
+}) {
+  const {
+    title,
+    description,
+    date,
+    location,
+    isFree,
+    ticketPrice,
+    rsvpCount,
+    isGoing,
+    spotsLeft,
+    imageUrl,
+    category,
+    organizerId: organizer,
+  } = event;
 
   const soon = whenRelative(date);
   const past = soon === 'Already gone';
@@ -64,6 +85,13 @@ export default function EventCard({ event, index = 0, currentUserId, onRsvp, onD
               <Users className="h-3 w-3" strokeWidth={2.5} />
               {rsvpCount || 0} going
             </span>
+            {/* Only worth saying when there is a limit, and worth saying
+                loudly when it is nearly gone. */}
+            {spotsLeft !== null && spotsLeft !== undefined && (
+              <span className={spotsLeft === 0 ? 'font-extrabold text-crimson' : ''}>
+                {spotsLeft === 0 ? 'Full' : `${spotsLeft} spot${spotsLeft === 1 ? '' : 's'} left`}
+              </span>
+            )}
           </div>
 
           <div className="mt-auto flex items-center gap-2 border-t-2 border-ink/10 pt-2">
@@ -85,13 +113,17 @@ export default function EventCard({ event, index = 0, currentUserId, onRsvp, onD
             ) : (
               !past && (
                 <Button
-                  variant="primary"
+                  // Going reads as a state you can undo, not a second
+                  // invitation, so it drops out of crimson once you are on
+                  // the list — the card spends its accent once.
+                  variant={isGoing ? 'paper' : 'primary'}
                   size="sm"
                   className="ml-auto !min-h-[34px] !px-2.5 !text-[13px]"
-                  onClick={() => onRsvp?.(event)}
-                  disabled={busy}
+                  onClick={() => (isGoing ? onCancelRsvp?.(event) : onRsvp?.(event))}
+                  disabled={busy || (!isGoing && spotsLeft === 0)}
+                  aria-pressed={Boolean(isGoing)}
                 >
-                  I&rsquo;m going
+                  {isGoing ? "You're going" : spotsLeft === 0 ? 'Full' : "I'm going"}
                 </Button>
               )
             )}

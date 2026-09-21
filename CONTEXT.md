@@ -1426,6 +1426,46 @@ serving, or the admin base path. In short:
   `tests/prod/production.test.mjs` against the production-mode server. The
   proxy test fails with `TRUST_PROXY=0`, as it should.
 
+## The community handshake and event RSVPs (2026-09-21)
+Lost & found, wanted and carpool posts are settled **from inside their chat
+thread**, and the post updates itself. Before this the board was write-only:
+a ride's `seatsAvailable` never moved (the number was decoration) and a
+found wallet stayed up until its owner remembered to close his own card.
+
+How it works: one side asks (`POST /chat/conversations/:id/claim`), the
+post's owner confirms or declines (`PATCH /chat/claims/:messageId`). The ask
+is a `type: 'claim'` message, so it sits in the thread like an offer does.
+Confirming applies the effect: lost & found -> `resolved`, wanted ->
+`fulfilled`, carpool -> seats decrease and the ride `closed` at zero. All
+three lists already filter `status: 'open'`, so closing hides the post.
+
+Non-obvious bits:
+- **The effects are conditional updates**, not read-modify-write
+  (`utils/communityClaim.js`). Two riders confirming the same last seat must
+  not take it twice; the loser gets a 409 and the seat count never goes
+  negative. Covered by a racing test in `tests/api/communityClaim.test.js`.
+- **Only the post's owner decides.** The asker confirming their own request
+  would be handing themselves a seat.
+- **One open ask per thread**, or the owner gets two cards for one seat.
+- `GET /chat/conversations` now returns `subjectState` per community thread
+  (owner, status, seats left). That is what the thread uses to decide which
+  button to show; without it the client would have to fetch each post.
+- Listings are deliberately NOT claimable: a sale has its own handshake
+  (offer -> deal -> code at the gate -> review).
+- **Events, closed the same day.** RSVP was `$inc: { rsvpCount: 1 }` on
+  whatever id it was handed: nobody was recorded, two taps counted twice and
+  nobody could pull out. Events now keep `attendees: [{ userId, at }]`, with
+  `rsvpCount` maintained alongside it (the admin lists read it), an optional
+  `capacity`, `PATCH /events/:id/rsvp` to join and `DELETE` the same path to
+  pull out. Both are conditional updates, so the last spot goes to exactly
+  one person. Joining twice is a no-op, not an error.
+- **The attendee list never leaves the server.** `forViewer` strips it and
+  returns `rsvpCount`, `spotsLeft` and `isGoing` instead — the board is
+  public, and who is going to what is not everyone's business. `isGoing`
+  needs to know who is asking on a public route, which is what
+  `attachUserIfSignedIn` (middleware/auth.js) is for: it reads the session if
+  there is one and lets visitors through either way.
+
 ## Next up
 
 **The student-facing product loop is closed end to end, and every screen in

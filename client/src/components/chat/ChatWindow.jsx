@@ -20,7 +20,19 @@ import Badge from '../ui/Badge';
 import MessageBubble from './MessageBubble';
 import ReportModal from '../report/ReportModal';
 import RentalLengthModal from './RentalLengthModal';
+import SeatRequestModal from './SeatRequestModal';
 import formatPrice from '../../utils/formatPrice';
+
+// The community posts that can be settled from inside the thread. A
+// listing is not one of them: a sale has its own handshake (an offer, a
+// deal, a code at the gate, a review).
+const CLAIMABLE = ['lostfound', 'lookingfor', 'carpool'];
+
+const ASK_LABEL = {
+  lostfound: 'I have this',
+  lookingfor: 'I have this',
+  carpool: 'Ask for a seat',
+};
 
 const SUBJECT_LABEL = {
   lookingfor: 'Wanted',
@@ -42,6 +54,8 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
   const [accepting, setAccepting] = useState(false);
   const [pendingRental, setPendingRental] = useState(null); // amount awaiting a hire length
   const [reporting, setReporting] = useState(null); // the message being reported
+  const [seatsOpen, setSeatsOpen] = useState(false);
+  const [claimBusy, setClaimBusy] = useState(false);
   const bottomRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -49,6 +63,18 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
   const other = conversation?.participants?.find((p) => String(p._id) !== String(currentUserId));
   const listing = conversation?.listingId;
   const isSeller = listing && String(listing.sellerId || '') === String(currentUserId);
+
+  // A thread about a community post (a want, a ride, a lost umbrella) rather
+  // than a listing. `subjectState` arrives with the conversation and says who
+  // owns the post, whether it is still open, and how many seats are left.
+  const subject = !listing ? conversation?.subject : null;
+  const subjectState = conversation?.subjectState;
+  const claimKind = CLAIMABLE.includes(subject?.kind) ? subject.kind : null;
+  const ownsPost = subjectState && String(subjectState.ownerId) === String(currentUserId);
+  const postOpen = subjectState?.status === 'open';
+  const seatsLeft = subjectState?.seatsAvailable ?? 0;
+  const canAsk =
+    Boolean(claimKind) && postOpen && !ownsPost && (claimKind !== 'carpool' || seatsLeft > 0);
 
   // History. Server returns newest-first for pagination, so flip it.
   const { data: history } = useQuery({
@@ -79,15 +105,30 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
       setLive((prev) => (prev.some((m) => m._id === msg._id) ? prev : [...prev, msg]));
     };
 
+    // A decided claim is the same message coming back changed, not a new
+    // one, so it replaces rather than appends.
+    const onClaim = (msg) => {
+      if (String(msg.conversationId) !== String(conversationId)) return;
+      setLive((prev) =>
+        prev.some((m) => m._id === msg._id)
+          ? prev.map((m) => (m._id === msg._id ? msg : m))
+          : [...prev, msg]
+      );
+      queryClient.invalidateQueries({ queryKey: ['chat', 'messages', conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+    };
+
     socket.on('chat:message', onMessage);
     socket.on('chat:offer', onMessage);
+    socket.on('chat:claim', onClaim);
 
     return () => {
       socket.emit('conversation:leave', conversationId);
       socket.off('chat:message', onMessage);
       socket.off('chat:offer', onMessage);
+      socket.off('chat:claim', onClaim);
     };
-  }, [conversationId]);
+  }, [conversationId, queryClient]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
@@ -126,6 +167,42 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
     }
 
     await openDeal(amount);
+  };
+
+  // --- the community handshake ------------------------------------------
+  //
+  // Asking and deciding both refresh the board as well as the thread: the
+  // ride loses seats, the lost-and-found post comes down.
+  const refreshAfterClaim = () => {
+    queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+    queryClient.invalidateQueries({ queryKey: ['chat', 'messages', conversationId] });
+    if (claimKind) queryClient.invalidateQueries({ queryKey: [claimKind] });
+  };
+
+  const ask = async (seats) => {
+    setClaimBusy(true);
+    try {
+      await api.post(`/chat/conversations/${conversationId}/claim`, seats ? { seats } : {});
+      setSeatsOpen(false);
+      refreshAfterClaim();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Could not send that.'));
+    } finally {
+      setClaimBusy(false);
+    }
+  };
+
+  const decideClaim = async (message, action) => {
+    setClaimBusy(true);
+    try {
+      const res = await api.patch(`/chat/claims/${message._id}`, { action });
+      toast.success(res.data.message);
+      refreshAfterClaim();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Could not do that.'));
+    } finally {
+      setClaimBusy(false);
+    }
   };
 
   const openDeal = async (amount, rentalPeriods) => {
@@ -219,6 +296,9 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
                   isMine={isMine}
                   canAcceptOffer={isSeller && !accepting}
                   onAcceptOffer={acceptOffer}
+                  canDecideClaim={Boolean(ownsPost)}
+                  claimBusy={claimBusy}
+                  onDecideClaim={decideClaim}
                   // Nothing to report about your own message.
                   onReport={isMine ? undefined : setReporting}
                 />
@@ -230,6 +310,28 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
 
         {/* --- Composer ------------------------------------------------ */}
         <div className="border-t-[3px] border-ink bg-paper-2 p-2.5">
+          {/* The point of the handshake: the moment the two of them agree in
+              the chat is the moment somebody will actually press a button. */}
+          {canAsk && (
+            <Button
+              variant="primary"
+              size="sm"
+              className="mb-2.5 w-full"
+              disabled={claimBusy}
+              onClick={() => (claimKind === 'carpool' ? setSeatsOpen(true) : ask())}
+            >
+              {ASK_LABEL[claimKind]}
+            </Button>
+          )}
+
+          {claimKind && !postOpen && (
+            <p className="meta mb-2.5 leading-snug">This post is closed. The thread stays here.</p>
+          )}
+
+          {claimKind === 'carpool' && postOpen && !ownsPost && seatsLeft === 0 && (
+            <p className="meta mb-2.5 leading-snug">No seats left on this ride.</p>
+          )}
+
           {offerOpen && (
             <div className="mb-2.5 flex items-center gap-2">
               <input
@@ -250,17 +352,19 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
           )}
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setOfferOpen((v) => !v)}
-              aria-label="Make an offer"
-              aria-pressed={offerOpen}
-              className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center border-2 border-ink transition-colors ${
-                offerOpen ? 'bg-ink text-paper-3' : 'bg-paper-3 text-ink hover:bg-paper-2'
-              }`}
-            >
-              <IndianRupee className="h-4 w-4" strokeWidth={3} />
-            </button>
+            {listing && (
+              <button
+                type="button"
+                onClick={() => setOfferOpen((v) => !v)}
+                aria-label="Make an offer"
+                aria-pressed={offerOpen}
+                className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center border-2 border-ink transition-colors ${
+                  offerOpen ? 'bg-ink text-paper-3' : 'bg-paper-3 text-ink hover:bg-paper-2'
+                }`}
+              >
+                <IndianRupee className="h-4 w-4" strokeWidth={3} />
+              </button>
+            )}
 
             <input
               value={draft}
@@ -287,6 +391,14 @@ export default function ChatWindow({ conversation, currentUserId, onBack }) {
           </p>
         </div>
       </div>
+
+      <SeatRequestModal
+        isOpen={seatsOpen}
+        seatsLeft={seatsLeft}
+        busy={claimBusy}
+        onClose={() => setSeatsOpen(false)}
+        onConfirm={(seats) => ask(seats)}
+      />
 
       <RentalLengthModal
         isOpen={pendingRental !== null}
