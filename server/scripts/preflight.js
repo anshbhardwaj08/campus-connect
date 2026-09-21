@@ -15,6 +15,7 @@ require('dotenv').config();
 const dns = require('dns');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
+const nodemailer = require('nodemailer');
 
 // Mirrors src/config/db.js — Atlas SRV lookups fail on some networks
 // without this, and a preflight that cannot reach the database is useless.
@@ -207,9 +208,56 @@ const checkAccounts = async () => {
     );
   }
 
-  const unverified = await User.countDocuments({ isEmailVerified: false });
+  // This was a warning while the verify link was optional. Login now refuses
+  // an unverified account, so each of these is somebody who cannot get in —
+  // and on this deployment that included the only admin.
+  const unverified = await User.countDocuments({ isEmailVerified: { $ne: true } });
   if (unverified) {
-    warn('accounts', `${unverified} account(s) never verified their college email`, 'Expected during development; worth a look before launch');
+    fail(
+      'accounts',
+      `${unverified} account(s) never verified their college email and can no longer sign in`,
+      'Grandfather the ones that pre-date the rule: npm run grandfather-verified -- --before <YYYY-MM-DD>'
+    );
+  }
+};
+
+// --- Mail -----------------------------------------------------------------
+
+// Signing up now depends on this. The verification link used to be optional
+// — a broken mailer was survivable, because login let people in anyway — so
+// the send failure was logged and shrugged off. Now a mailer that cannot
+// connect means nobody new can ever get in, and the only symptom is a
+// student staring at "check your inbox". Worth finding out here instead.
+const checkMailer = async () => {
+  if (!process.env.NODEMAILER_USER || !process.env.NODEMAILER_PASS) {
+    fail(
+      'mail',
+      'NODEMAILER_USER / NODEMAILER_PASS are not set',
+      'Without them no verification link is sent, and no new student can sign in'
+    );
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: false,
+    auth: { user: process.env.NODEMAILER_USER, pass: process.env.NODEMAILER_PASS },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+  });
+
+  try {
+    await transporter.verify();
+    pass('mail', `SMTP accepted the login for ${process.env.NODEMAILER_USER}`);
+  } catch (err) {
+    fail(
+      'mail',
+      `SMTP refused the connection: ${err.message}`,
+      'Gmail needs an app password, not the account password. Port 587 must be open outbound.'
+    );
+  } finally {
+    transporter.close();
   }
 };
 
@@ -220,6 +268,7 @@ const ICON = { PASS: ' ok ', WARN: 'warn', FAIL: 'FAIL' };
 const main = async () => {
   checkEnv();
   checkSecrets();
+  await checkMailer();
 
   try {
     await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 15000 });

@@ -75,7 +75,9 @@ export default function Register() {
         hostel: data.hostel,
       });
       toast.success('File opened. Check your college inbox.');
-      navigate('/verify-email');
+      // The address rides along so the verify screen can offer another link
+      // without asking for it again.
+      navigate('/verify-email', { state: { email: data.collegeEmail } });
     } catch (err) {
       toast.error(apiErrorMessage(err, 'That did not go through. Try again.'));
     } finally {

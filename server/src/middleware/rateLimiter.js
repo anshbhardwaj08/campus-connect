@@ -64,7 +64,25 @@ const passwordResetLimiter = rateLimit({
   },
 });
 
+// "Send my verification link again" is the same shape of problem as a reset
+// email — the successful request is the abusable one — so it counts successes
+// too. Its own bucket rather than sharing the reset one: a student who has
+// just asked for a password reset should not find they can no longer ask for
+// the verification link that is blocking their sign-in.
+const resendVerifyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  skip: isTest,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests for that link. Try again in an hour.',
+  },
+});
+
 module.exports = apiLimiter;
 module.exports.apiLimiter = apiLimiter;
 module.exports.authLimiter = authLimiter;
 module.exports.passwordResetLimiter = passwordResetLimiter;
+module.exports.resendVerifyLimiter = resendVerifyLimiter;

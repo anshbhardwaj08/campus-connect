@@ -69,6 +69,13 @@ export default function Login() {
         navigate('/suspended', { state: { reason: err.response.data.details?.reason || null } });
         return;
       }
+      // Not a wrong password — the account is real and the password was
+      // right. Send them to the screen that can actually get them a new
+      // link, with the address already filled in.
+      if (err?.response?.data?.code === 'EMAIL_UNVERIFIED') {
+        navigate('/verify-email', { state: { email: data.collegeEmail } });
+        return;
+      }
       toast.error(apiErrorMessage(err, 'That did not work. Check the address and the password.'));
     } finally {
       setLoading(false);

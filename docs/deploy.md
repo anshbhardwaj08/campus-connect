@@ -40,9 +40,18 @@ Render service.
    URLs. Those are expected, because Render sets both.
 3. **MongoDB Atlas:** Network Access → Add IP Address → `0.0.0.0/0`. Render's
    free plan has no fixed outgoing IP address.
-4. **Gmail:** `NODEMAILER_PASS` must be a Gmail **app password** (Google
-   Account → Security → 2-Step Verification → App passwords), not the account
-   password. Registration sends a verification email.
+4. **Gmail — this one is load-bearing.** `NODEMAILER_PASS` must be a Gmail
+   **app password** (Google Account → Security → 2-Step Verification → App
+   passwords), not the account password.
+
+   Signing in now requires a verified college address, so the verification
+   email is the only door into the product: if mail does not send, **no new
+   student can ever get in**, and the only symptom is somebody looking at
+   "check your inbox" forever. `npm run preflight` connects to SMTP and
+   logs in for real, and FAILs if it cannot — do not skip it.
+
+   Port 587 outbound must be open. Some hosts block 465, which is why the
+   transport uses 587 + STARTTLS.
 5. **Push** everything to GitHub.
 
 ## Deploy on Render
@@ -56,7 +65,8 @@ Render service.
 
    If Render gives the service a different address (the name is taken, so it
    adds a suffix), change both to the real address afterwards under
-   **Environment**. Email links are built from `CLIENT_URL`.
+   **Environment**. Email links are built from `CLIENT_URL`, so a wrong
+   value here sends every new student a verification link to nowhere.
 4. **Apply.** The first build takes about 5–8 minutes.
 5. Open the address. The student app is at `/` and the admin panel at `/admin`.
 

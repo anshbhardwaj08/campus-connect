@@ -2,8 +2,8 @@ const Joi = require('joi');
 
 const registerSchema = Joi.object({
   name: Joi.string().trim().min(2).max(100).required(),
-  email: Joi.string().email().required(),
-  collegeEmail: Joi.string().email().required(),
+  email: Joi.string().trim().email().required(),
+  collegeEmail: Joi.string().trim().email().required(),
   phone: Joi.string().trim().min(8).max(15).required(),
   password: Joi.string().min(8).max(128).required(),
   dept: Joi.string().trim().allow(''),
@@ -12,7 +12,7 @@ const registerSchema = Joi.object({
 });
 
 const loginSchema = Joi.object({
-  collegeEmail: Joi.string().email().required(),
+  collegeEmail: Joi.string().trim().email().required(),
   password: Joi.string().required(),
 });
 
@@ -22,7 +22,11 @@ const otpSchema = Joi.object({
 });
 
 const forgotPasswordSchema = Joi.object({
-  collegeEmail: Joi.string().email().required(),
+  collegeEmail: Joi.string().trim().email().required(),
+});
+
+const resendVerificationSchema = Joi.object({
+  collegeEmail: Joi.string().trim().email().required(),
 });
 
 const resetPasswordSchema = Joi.object({
@@ -38,4 +42,5 @@ module.exports = {
   otpSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  resendVerificationSchema,
 };

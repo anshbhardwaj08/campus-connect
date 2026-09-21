@@ -9,13 +9,24 @@ const {
   otpSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  resendVerificationSchema,
 } = require('../validators/auth.validator');
-const { authLimiter, passwordResetLimiter } = require('../middleware/rateLimiter');
+const {
+  authLimiter,
+  passwordResetLimiter,
+  resendVerifyLimiter,
+} = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
 router.post('/register', authLimiter, validate(registerSchema), validateCollegeEmail, authController.register);
 router.get('/verify-email', authController.verifyEmail);
+router.post(
+  '/resend-verification',
+  resendVerifyLimiter,
+  validate(resendVerificationSchema),
+  authController.resendVerification
+);
 router.post('/send-otp', authLimiter, authController.sendOTP);
 router.post('/verify-otp', authLimiter, validate(otpSchema), authController.verifyOTP);
 // passwordResetLimiter, not authLimiter: this one has to count successful

@@ -19,6 +19,21 @@ const cookieOptions = {
   sameSite: 'lax',
 };
 
+// Mints a one-day link and mails it. A failed send is logged and swallowed
+// by every caller: the account exists either way, and the student can ask
+// for another link from the verify screen. Throwing here would leave them
+// with a 500 and an account they cannot register again for.
+const sendVerificationLink = async (user) => {
+  const token = jwt.sign({ userId: user._id }, process.env.JWT_ACCESS_SECRET, { expiresIn: '1d' });
+  const verifyLink = `${process.env.CLIENT_URL}/verify-email?token=${token}`;
+
+  try {
+    await sendVerifyEmail(user.collegeEmail, verifyLink);
+  } catch (err) {
+    winstonLogger.error(`Failed to send verification email to ${user.collegeEmail}: ${err.message}`);
+  }
+};
+
 // POST /auth/register
 const register = catchAsync(async (req, res) => {
   const { name, email, phone, password, dept, batch, hostel } = req.body;
@@ -41,16 +56,7 @@ const register = catchAsync(async (req, res) => {
 
   emitAdminActivity('users');
 
-  const verifyToken = jwt.sign({ userId: user._id }, process.env.JWT_ACCESS_SECRET, {
-    expiresIn: '1d',
-  });
-  const verifyLink = `${process.env.CLIENT_URL}/verify-email?token=${verifyToken}`;
-
-  try {
-    await sendVerifyEmail(collegeEmail, verifyLink);
-  } catch (err) {
-    winstonLogger.error(`Failed to send verification email to ${collegeEmail}: ${err.message}`);
-  }
+  await sendVerificationLink(user);
 
   return res
     .status(201)
@@ -77,6 +83,25 @@ const verifyEmail = catchAsync(async (req, res) => {
   if (!user) throw new ApiError(404, 'User not found');
 
   return res.status(200).json(new ApiResponse(200, null, 'Email verified successfully'));
+});
+
+// POST /auth/resend-verification
+//
+// Without this, a student whose link never arrived had nowhere to go:
+// registering again is a 409, and signing in is refused until they verify.
+// The account was simply stuck.
+//
+// Answers the same way whatever it finds, for the reason forgotPassword
+// does — otherwise this becomes a way to test whether an address is
+// registered, one guess at a time.
+const resendVerification = catchAsync(async (req, res) => {
+  const collegeEmail = req.body.collegeEmail.trim().toLowerCase();
+  const SAME_ANSWER = 'If that account still needs verifying, a fresh link is on its way.';
+
+  const user = await User.findOne({ collegeEmail });
+  if (user && !user.isEmailVerified) await sendVerificationLink(user);
+
+  return res.status(200).json(new ApiResponse(200, null, SAME_ANSWER));
 });
 
 // POST /auth/send-otp
@@ -213,6 +238,19 @@ const login = catchAsync(async (req, res) => {
   const isMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isMatch) throw new ApiError(401, 'Invalid credentials');
 
+  // The one thing this product promises is that everybody on it holds a
+  // college address that was actually checked. Until this, nothing enforced
+  // that: the verify screen had a "sign in" button on it, and login never
+  // looked at the flag, so the link could be ignored entirely.
+  //
+  // Checked after the password on purpose. Before it, a wrong guess would
+  // still reveal whether an address is registered and unverified.
+  if (!user.isEmailVerified) {
+    throw new ApiError(403, 'Verify your college email before signing in').withCode(
+      'EMAIL_UNVERIFIED'
+    );
+  }
+
   const accessToken = generateAccessToken(user._id);
   const refreshToken = generateRefreshToken(user._id);
 
@@ -264,6 +302,7 @@ const logout = catchAsync(async (req, res) => {
 module.exports = {
   register,
   verifyEmail,
+  resendVerification,
   sendOTP,
   verifyOTP,
   forgotPassword,

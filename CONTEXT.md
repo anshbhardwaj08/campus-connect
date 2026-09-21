@@ -6,7 +6,7 @@ A running handoff file. **Read this first when starting a new session**, then
 Keep it current: when a chunk of work lands, move it from "Next up" to "Done"
 and add anything a cold reader could not infer from the code.
 
-Last updated: 2026-09-18 (both apps complete; renting, the hire clock, and a server test suite)
+Last updated: 2026-09-21 (community + event handshakes; email verification is now enforced)
 
 ---
 
@@ -1465,6 +1465,63 @@ Non-obvious bits:
   needs to know who is asking on a public route, which is what
   `attachUserIfSignedIn` (middleware/auth.js) is for: it reads the session if
   there is one and lets visitors through either way.
+
+## Signing up actually means something now (2026-09-21)
+
+The whole premise of this product is that everybody on it holds a college
+address that was **checked**. Nothing enforced that. `login` never looked at
+`isEmailVerified`, and the verify screen carried a button straight to the
+sign-in form — so the flow was: register, click "I have verified — sign in",
+and you were in, with the flag still `false`. Verified since forever, for
+nobody. The flag was written by the link and then read only by a decorative
+"Verified student" badge in five places.
+
+Worse, there was no way back in if the link never arrived: registering again
+answers 409, and there was no resend. The account was stuck for good. The
+only escape was the bypass above, which is probably why nobody complained.
+
+What changed:
+- **`login` refuses an unverified account** with 403 and
+  `code: 'EMAIL_UNVERIFIED'`. Checked *after* the password comparison on
+  purpose — before it, a wrong guess would still reveal whether an address
+  is registered.
+- **`POST /auth/resend-verification`** mints a fresh one-day link. It answers
+  the same sentence whatever it finds (unknown address, already verified,
+  genuinely unverified), for the same reason `forgot-password` does. Its own
+  rate-limit bucket, 5/hour counting successes: sharing the reset bucket
+  would mean asking for a reset could block the link you need to sign in.
+- **`/verify-email` is the way out of every corner**, not a waiting room. It
+  carries a resend form on both the waiting and the failed state, pre-filled
+  from router state (Register and Login both hand the address over). The
+  failed state used to say "Start over" and link to `/register`, which
+  answers 409 for an address that is already taken — a dead end dressed as
+  an exit.
+- **Login routes `EMAIL_UNVERIFIED` to `/verify-email`** with the address,
+  the way `ACCOUNT_BLOCKED` routes to `/suspended`. It is not a typo in the
+  password and should not look like one.
+- **Joi now trims the email fields.** Every one of these controllers already
+  called `.trim().toLowerCase()`, but the schema rejected the padding first —
+  so a pasted address with a trailing space was a 400 on login, register,
+  forgot-password and resend alike.
+
+Two things a cold reader would not guess:
+
+- **The 7 pre-existing accounts were grandfathered** on 2026-09-21, admin
+  included — that account had never verified either, so turning the check on
+  without this would have locked the only admin out of the deployed product.
+  `npm run grandfather-verified -- --before <date> [--commit]`. It requires
+  an explicit cutoff and reports before it writes, so it cannot quietly
+  re-verify somebody who signs up tomorrow and ignores their link.
+- **A broken mailer is now a deploy blocker**, and `npm run preflight` calls
+  `transporter.verify()` to prove it. It used to be survivable: a failed send
+  is caught and logged, and people could sign in regardless. Now it means no
+  new student can ever get in, and the only symptom is somebody staring at
+  "check your inbox". `CLIENT_URL` matters for the same reason — the link in
+  the email is built from it.
+
+Covered by `server/tests/api/emailVerification.test.js` (17) and
+`client/tests/e2e/signup.test.mjs`, which walks the real screens: register ->
+refused at sign-in -> ask for a fresh link -> open it -> in.
 
 ## Next up
 

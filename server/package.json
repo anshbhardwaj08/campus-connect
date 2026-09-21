@@ -11,7 +11,8 @@
     "test": "node --test \"tests/**/*.test.js\"",
     "test:watch": "node --test --watch \"tests/**/*.test.js\"",
     "preflight": "node scripts/preflight.js",
-    "rotate-password": "node scripts/rotate-password.js"
+    "rotate-password": "node scripts/rotate-password.js",
+    "grandfather-verified": "node scripts/grandfather-verified.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
