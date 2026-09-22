@@ -40,7 +40,7 @@ export default function ForgotPassword() {
       setSent(true);
     } catch (err) {
       // A 429 from the reset limiter is the one real failure worth showing.
-      setError(apiErrorMessage(err, 'Could not send that. Try again in a hour.'));
+      setError(apiErrorMessage(err, 'Could not send that. Try again in seconds.'));
     }
   };
 
