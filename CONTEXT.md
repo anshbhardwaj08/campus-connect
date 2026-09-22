@@ -6,7 +6,7 @@ A running handoff file. **Read this first when starting a new session**, then
 Keep it current: when a chunk of work lands, move it from "Next up" to "Done"
 and add anything a cold reader could not infer from the code.
 
-Last updated: 2026-09-21 (community + event handshakes; email verification is now enforced)
+Last updated: 2026-09-22 (the wanted board matches listings; email verification is enforced)
 
 ---
 
@@ -1522,6 +1522,131 @@ Two things a cold reader would not guess:
 Covered by `server/tests/api/emailVerification.test.js` (17) and
 `client/tests/e2e/signup.test.mjs`, which walks the real screens: register ->
 refused at sign-in -> ask for a fresh link -> open it -> in.
+
+## The wanted board answers itself (2026-09-22)
+
+`LookingFor` was write-only. A student posted "need a calculator", it sat
+there, and nothing ever read it again — the model even carries an index
+commented "for matching listings" that nothing used. The only way to find out
+was to keep scrolling /browse, which is the job the wanted board exists to
+save you.
+
+An hourly job (`wantedMatch`, cron `30 * * * *`, offset from savedSearch's
+`0 * * * *`) now matches open wanted posts against active listings and
+notifies the student, linking straight to the best match.
+
+**The important part is `src/matchers/`, which is a seam.** Everything that
+asks "which listings answer this post?" goes through `matchers/index.js` and
+nothing outside that folder knows how the answer is reached. The contract is
+`findMatches(wanted, { since, limit }) -> [{ listing, score, shared }]`, and
+it is `async` even though today's matcher awaits nothing — so swapping in a
+vector lookup later touches this folder and a config value, not the service,
+the job, the notification or their tests. Set `WANTED_MATCHER=semantic` once
+`semantic.matcher.js` exists; keep the keyword one as the fallback for when
+the embedding provider is unreachable, and as the thing to measure against.
+
+Why a hand-written synonym list rather than embeddings, today: a college
+marketplace has a small, stable vocabulary (~40 kinds of thing), and for a
+fixed vocabulary a list somebody wrote is more accurate than a general model,
+costs nothing, needs no API key, adds no latency and cannot break because a
+key expired. It stops paying off when the vocabulary outgrows the list —
+`tests/unit/vocabulary.test.js` has a `what a word list cannot do` block
+holding the ceiling ("something to study on" will never find a desk), which
+is what should start passing the day a semantic matcher lands.
+
+Decisions that are not obvious from the code:
+
+- **Category boosts, it does not filter.** A real wanted post on this
+  deployment asks for a "calculator" and is filed under `books`, while any
+  calculator listing sits in `electronics` or `stationery`. Filtering on
+  category throws that match away, and miscategorised posts are the norm.
+  The score is 85% "how much of what you asked for is present" and 15% "is it
+  filed where you would have looked". Blended, not added: a one-word request
+  matched exactly already scores 1.0, so a boost on top was clipped by the
+  cap and the category made no difference at all.
+- **The first run looks at the whole board**, not just listings newer than
+  the post (`lastNotifiedAt` unset means no date filter). Saved searches work
+  the other way round on purpose — you ran the search, saw the results, then
+  saved it, so only new listings are news. Nobody browses before writing a
+  wanted post, so what they are asking for is usually already up.
+- **`lastNotifiedAt` only moves on a hit.** A post that matched nothing keeps
+  scanning the whole board, so it still finds a listing posted before the job
+  last ran.
+- **Ambiguous words are deliberately absent from the vocabulary.** "notebook"
+  is stationery far more often than a laptop; "keyboard" is a computer
+  peripheral far more often than a piano. A wrong synonym is worse than a
+  missing one — it notifies the wrong person, and they stop trusting alerts.
+- **Unknown words fall through as themselves**, so the matcher is never worse
+  than plain word overlap: "Cengel thermodynamics" still finds
+  "thermodynamics by Cengel". The list only ever adds matches.
+
+Dry-run against the live board on 2026-09-22 (read-only): all five real
+wanted posts are junk ("dbjs", "gopal ki bund") and matched nothing, while
+"need a laptop" found the HP Laptop at 0.85 and the sold Physics textbook was
+correctly ignored.
+
+### The semantic matcher (2026-09-22)
+
+`WANTED_MATCHER=semantic` switches the seam to embeddings
+(`matchers/semantic.matcher.js`). It is **not** the default: the vocabulary
+matcher still is, because switching should follow `npm run match:compare`,
+which runs both over the same board and prints what each found, rather than
+a belief that vectors are better.
+
+The one rule the whole file is arranged around: **a wanted post is never
+worse off for having asked the semantic matcher.** No provider configured,
+provider down, provider throwing mid-run — every path hands the question to
+the keyword matcher instead of returning nothing. `OPENAI_API_KEY` in
+`server/.env` is currently a 19-character placeholder, so today the semantic
+matcher *is* the keyword matcher, and `match:compare` says so in as many
+words rather than printing two identical columns and letting you conclude
+they agree.
+
+- **There is no vector database, on purpose.** Cosine in Node over a few
+  hundred listings is microseconds and needs no Atlas index, no tier check
+  and no second code path for the in-memory mongod the tests use. Atlas
+  `$vectorSearch` earns its keep in the tens of thousands of documents; when
+  the board gets there the change is inside `semantic.matcher.js`.
+- **Vectors are cached on the documents** (`embedding.vector`, `.model`,
+  `.sourceHash`), filled in by the hourly job and never on a request path.
+  `sourceHash` catches an edited listing; `model` means changing the
+  embedding model invalidates every vector rather than silently comparing
+  two incompatible spaces. Steady-state cost of a run is one call for
+  whatever was posted in the last hour.
+- **`select: false` on both models, and a test pins it.** 256 doubles is
+  bigger than the listing itself; without it every browse response would
+  carry one per card. Anything that needs the vector asks for `+embedding` —
+  and the wanted service must, which a test caught the hard way: without it
+  the service re-embedded every open post every hour, forever, visible
+  nowhere except the bill.
+- **256 dimensions, not 1536.** text-embedding-3-small is trained so a
+  shortened vector still works, and 256 stores six times less.
+- **`SEMANTIC_THRESHOLD` ships at 0.45 and has not been measured.** It is a
+  plausible gap between "unrelated" (~0.1-0.3) and "related" (~0.4-0.7) for
+  this model, not a finding. Tune it with `match:compare` against real
+  listings and a real key.
+- **Eligibility lives in `matchers/candidates.js`**, shared by both. Whether
+  a listing is sold, or the asker's own, or over budget is correctness, not
+  relevance — a matcher does not get a vote. Duplicated, it is how the
+  semantic one would quietly start recommending people their own bike.
+
+What the tests do and do not prove: `tests/api/semanticMatcher.test.js`
+injects a stub embedder, so it covers caching, batching, staleness,
+eligibility and both fallbacks, and reaches no network. It proves nothing
+about whether real embeddings match well — nothing offline can. That is what
+`match:compare` is for.
+
+Still open, and worth knowing before the AI work starts:
+- `services/ai.service.js` (`suggestPrice`, `getScamScore`, `gpt-4o-mini`)
+  is **dead code** — nothing has ever imported it.
+- `utils/scamScore.js` **cannot reach its own threshold**. It is called as
+  `calculateScamScore(req.body)`, but `categoryAvgPrice` is never in the
+  body, so the 40-point price branch never runs. Maximum reachable score is
+  55; `listing.controller.js` quarantines at `>= 70`. No listing has ever
+  been flagged, and the admin pending queue is unreachable by that path.
+- `savedSearch.service.js` matches with `$text` (whole words only), the very
+  thing `listing.controller.js:58` has a comment explaining it avoided for
+  the browse search. Saved-search alerts silently miss matches today.
 
 ## Next up
 

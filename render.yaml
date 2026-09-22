@@ -44,6 +44,13 @@ services:
       - key: NODEMAILER_PASS
         sync: false
       # Optional: background jobs only (listing expiry, rental reminders,
-      # saved-search alerts). The site works without it.
+      # saved-search alerts, wanted-post matching). The site works without it.
       - key: REDIS_URL
         sync: false
+      # Optional: only the semantic wanted-post matcher uses this, and only
+      # when WANTED_MATCHER=semantic. Without a real key the matcher falls
+      # back to the hand-written vocabulary and nothing else changes.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: WANTED_MATCHER
+        value: keyword

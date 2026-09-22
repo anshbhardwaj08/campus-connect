@@ -37,6 +37,24 @@ const listingSchema = new mongoose.Schema(
       default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     },
     rejectionReason: { type: String },
+    // Cached vector for the semantic matcher, filled in by the hourly
+    // wantedMatch job and never on a request path. `sourceHash` is what the
+    // vector was made from, so an edited listing is spotted and re-embedded;
+    // `model` so that changing the embedding model invalidates every vector
+    // rather than silently comparing two incompatible spaces.
+    //
+    // select: false — it is a few hundred numbers nobody browsing wants, and
+    // without this every listing response would carry it.
+    embedding: {
+      type: {
+        vector: { type: [Number], default: undefined },
+        model: String,
+        sourceHash: String,
+        at: Date,
+      },
+      select: false,
+      default: undefined,
+    },
     scamScore: { type: Number, default: 0 },
   },
   { timestamps: true }
