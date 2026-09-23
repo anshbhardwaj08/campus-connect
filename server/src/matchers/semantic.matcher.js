@@ -24,15 +24,33 @@ const { cosine, sourceHash, isFresh } = require('./vector');
 const keyword = require('./keyword.matcher');
 const defaultEmbedder = require('./embedder');
 
-// Cosine similarity between two short texts from text-embedding-3-small
-// lands around 0.1-0.3 for unrelated things and 0.4-0.7 for related ones,
-// so this sits between them.
+// Calibrated, not guessed — but calibrated on a small board, so read the
+// numbers before trusting it elsewhere.
 //
-// Treat it as a starting point, not a finding. It has NOT been tuned against
-// this board, because that needs a real API key and real listings — run
-// `npm run match:compare` once you have both, and move it with the numbers
-// in front of you.
-const THRESHOLD = Number(process.env.SEMANTIC_THRESHOLD) || 0.45;
+// It shipped at 0.45 on the reasoning that unrelated text scores 0.1-0.3.
+// That is true of some embedding spaces and flatly wrong here:
+// gemini-embedding-001 with the retrieval task types puts EVERYTHING in a
+// narrow band, and the first real run had the control post ("dbjs", which
+// means nothing) matching five listings at 0.57-0.59.
+//
+// Measured against the seeded board on 2026-09-22 (server/scripts/
+// seed-demo-listings.js, seven listings with known right answers):
+//
+//   right answers      0.67 - 0.74
+//   wrong answers      0.53 - 0.69
+//   pure junk ("dbjs") 0.59 at best
+//
+// 0.66 keeps all six right answers, drops the junk entirely, and lets
+// through one arguable wrong one (a poster, for "something to study on in
+// my room" — it is at least a thing for a room). 0.70 would lose the room
+// heater at 0.67, which is a worse trade: a missed match is invisible, a
+// wrong one teaches people to ignore the alerts.
+//
+// This number is PER PROVIDER. OpenAI's single space spreads scores much
+// wider and will want a lower one. Re-run `npm run match:compare` after any
+// change of provider or model, and set SEMANTIC_THRESHOLD rather than
+// editing this.
+const THRESHOLD = Number(process.env.SEMANTIC_THRESHOLD) || 0.66;
 
 // A ceiling on how much a single run will embed, so a first run over a large
 // board cannot turn into one enormous bill. Anything left over is picked up
@@ -46,13 +64,13 @@ const createSemanticMatcher = (embedder) => {
    * Returns the document's vector, embedding and caching it if what is
    * stored is missing, stale, or from a different model.
    */
-  const embeddingFor = async (Model, doc) => {
+  const embeddingFor = async (Model, doc, kind) => {
     const texts = textOf(doc);
     const hash = sourceHash(...texts);
 
     if (isFresh(doc.embedding, hash, embedder.describe().model)) return doc.embedding.vector;
 
-    const [vector] = await embedder.embed([texts.join('\n')]);
+    const [vector] = await embedder.embed([texts.join('\n')], { kind });
     const embedding = { vector, model: embedder.describe().model, sourceHash: hash, at: new Date() };
 
     // Fire-and-remember: a failed cache write must not fail the match, it
@@ -83,7 +101,10 @@ const createSemanticMatcher = (embedder) => {
     }
 
     if (pending.length) {
-      const fresh = await embedder.embed(pending.map(({ listing }) => textOf(listing).join('\n')));
+      const fresh = await embedder.embed(
+        pending.map(({ listing }) => textOf(listing).join('\n')),
+        { kind: 'document' }
+      );
 
       await Promise.all(
         pending.map(({ listing, hash }, i) => {
@@ -118,7 +139,11 @@ const createSemanticMatcher = (embedder) => {
 
       if (candidates.length === 0) return [];
 
-      const askedVector = await embeddingFor(LookingFor, wanted);
+      // A question and the thing that answers it are embedded differently
+      // where the provider supports it — a short request lands nearer the
+      // longer listings that answer it, rather than nearer other short
+      // requests. Providers without the distinction ignore this.
+      const askedVector = await embeddingFor(LookingFor, wanted, 'query');
       const vectors = await embeddingsForCandidates(candidates);
 
       // Kept for the notification and for comparing the two matchers: which

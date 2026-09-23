@@ -1621,10 +1621,34 @@ they agree.
   nowhere except the bill.
 - **256 dimensions, not 1536.** text-embedding-3-small is trained so a
   shortened vector still works, and 256 stores six times less.
-- **`SEMANTIC_THRESHOLD` ships at 0.45 and has not been measured.** It is a
-  plausible gap between "unrelated" (~0.1-0.3) and "related" (~0.4-0.7) for
-  this model, not a finding. Tune it with `match:compare` against real
-  listings and a real key.
+- **`SEMANTIC_THRESHOLD` is 0.66, measured on 2026-09-22 — and it is per
+  provider.** It shipped at 0.45 on the reasoning that unrelated text scores
+  0.1-0.3. Flatly wrong for `gemini-embedding-001` with retrieval task
+  types, which puts everything in a narrow band: the first real run had the
+  control post ("dbjs", meaningless) matching five listings at 0.57-0.59.
+  Against the seeded board — right answers 0.67-0.74, wrong answers
+  0.53-0.69, junk 0.59 at best — 0.66 keeps all six right answers and drops
+  the junk. 0.70 would lose the room heater at 0.67, a worse trade: a missed
+  match is invisible, a wrong one teaches people to ignore alerts. Re-run
+  `match:compare` after any change of provider or model.
+- **Two providers, in `matchers/embedders/`.** `gemini.js` (free tier, no
+  card, `text-embedding-004`, 768 dims) and `openai.js` (paid,
+  `text-embedding-3-small`, 256 dims). `embedder.js` picks by which key is
+  actually set, Gemini first, `EMBEDDER` to force one. Nothing else to
+  configure: drop `GEMINI_API_KEY` in `.env` and the semantic matcher works.
+- **A cached vector records which provider made it** (`gemini:` / `openai:`
+  prefix on `embedding.model`). Without that, switching provider would
+  compare vectors from two different spaces and every score would look
+  plausible while meaning nothing.
+- **Gemini embeds a question and a listing differently** (`RETRIEVAL_QUERY`
+  vs `RETRIEVAL_DOCUMENT`), which is what those task types are trained for —
+  a short request lands nearer the longer listings that answer it rather
+  than nearer other short requests. OpenAI has no such distinction and
+  ignores the argument.
+- **The Gemini key goes in the `x-goog-api-key` header, never `?key=`.** A
+  failed fetch puts the URL in the error message and that message goes to
+  the log file, which is exactly how the Redis password ended up in a log on
+  this project. A test pins it.
 - **Eligibility lives in `matchers/candidates.js`**, shared by both. Whether
   a listing is sold, or the asker's own, or over budget is correctness, not
   relevance — a matcher does not get a vote. Duplicated, it is how the
@@ -1635,6 +1659,67 @@ injects a stub embedder, so it covers caching, batching, staleness,
 eligibility and both fallbacks, and reaches no network. It proves nothing
 about whether real embeddings match well — nothing offline can. That is what
 `match:compare` is for.
+
+### Demo listings for testing the matchers (2026-09-22)
+
+`npm run seed:demo -- --for <collegeEmail> [--remove] [--commit]` writes seven
+listings and seven wanted posts to **the live database**. Run on 2026-09-22
+for `anshbhardwaj.bt24cse@pec.edu.in`; remove with the same command plus
+`--remove --commit`.
+
+The fixtures are chosen, not invented. Two are worded so the vocabulary
+already finds them, four share **no words at all** with the listing that
+answers them ("somewhere to keep my food cold" -> "Mini fridge, 90 litres"),
+and one is junk as a control. So the compare output reads as a scoreboard:
+if the four `semantic` rows are still empty after switching to
+`WANTED_MATCHER=semantic`, the switch bought nothing.
+
+Baseline with no provider configured, 2026-09-22: keyword found 2 of 6, all
+four no-overlap cases empty, control correctly empty.
+
+Every listing belongs to one throwaway account (`demo.seed@pec.edu.in`, no
+usable password) so removal is exact. The wanted posts belong to the real
+student, because the notifications have to land somewhere visible.
+
+**A real gap this surfaced.** A live wanted post reads `cycle`, `maxBudget:
+100`, description "for one hour" — somebody wanting to RENT a cycle for an
+hour. It matches nothing, correctly by the current rules (the ₹4,200 cycle is
+over budget) and uselessly in fact: `LookingFor` has no `listingType`, so a
+rental request is scored against sale prices. Neither matcher can fix that;
+the model needs the field.
+
+### Switching to Gemini, and two bugs it cost (2026-09-22)
+
+Evidence for the switch, same board, `npm run match:compare`:
+
+```
+both agreed on   2
+semantic only    5   <- what switching gains
+keyword only     0   <- what switching loses
+```
+
+Top-1 was correct on all six seeded posts, including the four the word list
+cannot reach ("somewhere to keep my food cold" -> "Mini fridge, 90 litres",
+0.70). So `render.yaml` now sets `WANTED_MATCHER=semantic`, which is safe to
+leave on regardless: with no key the matcher falls back by itself.
+
+Two things went wrong on the way, both worth not repeating:
+
+- **`text-embedding-004` does not exist for this API.** It 404s and says to
+  call ListModels. The models actually served are `gemini-embedding-001` and
+  the `gemini-embedding-2*` pair. Do not guess a model name — the one-liner
+  that lists them is in the header of `embedders/gemini.js`.
+  `gemini-embedding-001` returns 3072 dimensions by default (24KB a
+  listing), so the request asks for `outputDimensionality: 768`.
+- **A valid key read as "no key".** Google now issues 53-character keys
+  starting `AQ.` alongside the older 39-character `AIza` form, and the
+  shape check only knew the older one, so the matcher fell back silently
+  with nothing to explain why. `embedders/keyShape.js` no longer guesses at
+  prefixes for Gemini; it looks for placeholders instead, on word
+  boundaries (a random key does contain "here" or "todo" about one time in
+  five thousand). The fallback warning now says WHICH key was rejected and
+  why, because a silent fallback right after pasting a key is the confusing
+  case. Both shapes are pinned by tests.
 
 Still open, and worth knowing before the AI work starts:
 - `services/ai.service.js` (`suggestPrice`, `getScamScore`, `gpt-4o-mini`)

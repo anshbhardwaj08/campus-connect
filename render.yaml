@@ -47,10 +47,15 @@ services:
       # saved-search alerts, wanted-post matching). The site works without it.
       - key: REDIS_URL
         sync: false
-      # Optional: only the semantic wanted-post matcher uses this, and only
+      # Optional: only the semantic wanted-post matcher uses these, and only
       # when WANTED_MATCHER=semantic. Without a real key the matcher falls
       # back to the hand-written vocabulary and nothing else changes.
+      # GEMINI_API_KEY is the free one and wins when both are set.
+      - key: GEMINI_API_KEY
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
+      # Safe to leave on: with no GEMINI_API_KEY set, the semantic matcher
+      # falls back to the vocabulary by itself rather than failing.
       - key: WANTED_MATCHER
-        value: keyword
+        value: semantic

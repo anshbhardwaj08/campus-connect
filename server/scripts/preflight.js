@@ -261,6 +261,50 @@ const checkMailer = async () => {
   }
 };
 
+// --- Redis ----------------------------------------------------------------
+
+// The site works without Redis, which is exactly why this is worth checking:
+// nothing breaks visibly. config/redis.js falls back to
+// redis://localhost:6379 when REDIS_URL is unset, so on a host with no Redis
+// the server quietly retries localhost forever and every background job
+// simply never runs. No error page, no failed request — the wanted-post
+// matcher just never tells anybody anything.
+const JOBS = 'listing expiry, bump expiry, rental reminders, saved-search alerts, wanted-post matching';
+
+const checkRedis = async () => {
+  if (!process.env.REDIS_URL) {
+    warn(
+      'redis',
+      'REDIS_URL is not set, so no background job will run',
+      `Without it: ${JOBS}. The site itself is unaffected.`
+    );
+    return;
+  }
+
+  const Redis = require('ioredis');
+  const client = new Redis(process.env.REDIS_URL, {
+    lazyConnect: true,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 1,
+    // Fail fast rather than sitting in the reconnect backoff: this is a
+    // check, not a service.
+    retryStrategy: () => null,
+    connectTimeout: 10000,
+  });
+
+  try {
+    await client.connect();
+    await client.ping();
+    pass('redis', `Reachable at ${new URL(process.env.REDIS_URL).hostname} — background jobs will run`);
+  } catch (err) {
+    // Never the error object: an ioredis auth failure carries the failing
+    // command, and for AUTH that means the password is in the payload.
+    fail('redis', `REDIS_URL is set but unreachable: ${err.message}`, `Background jobs will not run: ${JOBS}`);
+  } finally {
+    client.disconnect();
+  }
+};
+
 // --- Run ------------------------------------------------------------------
 
 const ICON = { PASS: ' ok ', WARN: 'warn', FAIL: 'FAIL' };
@@ -269,6 +313,7 @@ const main = async () => {
   checkEnv();
   checkSecrets();
   await checkMailer();
+  await checkRedis();
 
   try {
     await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 15000 });

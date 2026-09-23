@@ -70,8 +70,19 @@ Render service.
 4. **Apply.** The first build takes about 5–8 minutes.
 5. Open the address. The student app is at `/` and the admin panel at `/admin`.
 
-`REDIS_URL` is optional. Without it the site works, but the background jobs
-do not run: expiring old listings, rental due-date reminders and saved-search
+`REDIS_URL` is optional, and that is exactly why it is easy to get wrong:
+without it nothing visibly breaks. `config/redis.js` falls back to
+`redis://localhost:6379`, so an unset value means the server quietly retries
+a Redis that is not there and **every background job silently never runs** —
+including wanted-post matching, so students are never told when somebody
+lists the thing they asked for.
+
+To check: Render dashboard -> your service -> **Environment**, and look for
+`REDIS_URL`. Then in the deploy log, look for five `Scheduled <name> job`
+lines and no `Redis ... unavailable` warnings. `npm run preflight` checks it
+too, but only for the environment it is run in.
+
+Without it the background jobs do not run: expiring old listings, rental due-date reminders and saved-search
 alerts. Render's free Key Value store, or Upstash, can provide one.
 
 ## Redis connections

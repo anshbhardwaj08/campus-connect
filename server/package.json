@@ -13,7 +13,9 @@
     "preflight": "node scripts/preflight.js",
     "rotate-password": "node scripts/rotate-password.js",
     "grandfather-verified": "node scripts/grandfather-verified.js",
-    "match:compare": "node scripts/match-compare.js"
+    "match:compare": "node scripts/match-compare.js",
+    "match:run": "node scripts/match-run.js",
+    "seed:demo": "node scripts/seed-demo-listings.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
