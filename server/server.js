@@ -10,6 +10,7 @@ const { scheduleSavedSearchAlertJob } = require('./src/jobs/savedSearchAlert.job
 const { scheduleBumpExpiryJob } = require('./src/jobs/bumpExpiry.job');
 const { scheduleRentalDueJob } = require('./src/jobs/rentalDue.job');
 const { scheduleWantedMatchJob } = require('./src/jobs/wantedMatch.job');
+const { scheduleCrossSellJob } = require('./src/jobs/crossSell.job');
 
 const PORT = process.env.PORT || 5000;
 
@@ -39,6 +40,7 @@ const scheduleBackgroundJobs = () => {
     ['bumpExpiry', scheduleBumpExpiryJob],
     ['rentalDue', scheduleRentalDueJob],
     ['wantedMatch', scheduleWantedMatchJob],
+    ['crossSell', scheduleCrossSellJob],
   ];
 
   jobs.forEach(([name, schedule]) => {

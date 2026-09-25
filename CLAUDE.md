@@ -6,7 +6,8 @@ college-email holders can buy, sell, exchange goods and services,
 and access community features like Lost & Found, carpools, and events.
 
 ## Start here
-- CONTEXT.md              -> running handoff: what is done, what is next
+- CONTEXT.md              -> running handoff: what is done, and why
+- ROADMAP.md             -> what is planned, what is broken, what was ruled out
 - docs/client-summary.md  -> client app, in brief
 - docs/admin-summary.md   -> admin app, in brief
 - docs/design-system.md   -> Comic Noir UI spec

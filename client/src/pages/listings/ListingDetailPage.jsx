@@ -11,6 +11,7 @@ import { useAuth } from '../../hooks/useAuth';
 import PageWrapper from '../../components/layout/PageWrapper';
 import ListingDetail from '../../components/listing/ListingDetail';
 import ListingGrid from '../../components/listing/ListingGrid';
+import GoesWith from '../../components/listing/GoesWith';
 import Skeleton from '../../components/ui/Skeleton';
 import Button from '../../components/ui/Button';
 
@@ -29,6 +30,32 @@ export default function ListingDetailPage() {
     queryKey: ['listing', id, 'similar'],
     queryFn: () => api.get(`/listings/${id}/similar`).then((r) => r.data.data.listings),
     enabled: Boolean(listing),
+  });
+
+  // Worked out hours ago by the hourly job and stored on the listing, so
+  // this is an ordinary list fetch — no model sits between a student and a
+  // page they clicked on.
+  const { data: goesWith } = useQuery({
+    queryKey: ['listing', id, 'goes-with'],
+    queryFn: () => api.get(`/listings/${id}/goes-with`).then((r) => r.data.data),
+    enabled: Boolean(listing),
+  });
+
+  // The empty state's whole point: nobody is selling the thing that goes
+  // with this, so put a request on the wanted board and let the matcher
+  // answer it when somebody does.
+  const askForMutation = useMutation({
+    mutationFn: (want) =>
+      api.post('/lookingfor', {
+        title: want.query,
+        description: `To go with ${listing.title}.`,
+        category: listing.category,
+      }),
+    onSuccess: () => {
+      toast.success('On the wanted board. You’ll be told when one turns up.');
+      queryClient.invalidateQueries({ queryKey: ['listing', id, 'goes-with'] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Could not post that request.')),
   });
 
   const { data: savedItems } = useQuery({
@@ -118,6 +145,12 @@ export default function ListingDetailPage() {
         saved={saved}
         onRelist={() => relistMutation.mutate()}
         relisting={relistMutation.isPending}
+      />
+
+      <GoesWith
+        items={goesWith?.items || []}
+        missing={isAuthenticated ? goesWith?.missing || [] : []}
+        onAskFor={(want) => askForMutation.mutate(want)}
       />
 
       {similar?.length > 0 && (

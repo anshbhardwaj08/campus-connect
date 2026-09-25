@@ -1721,6 +1721,64 @@ Two things went wrong on the way, both worth not repeating:
   why, because a silent fallback right after pasting a key is the confusing
   case. Both shapes are pinned by tests.
 
+## "Goes with this" — the cross-sell, and the RAG (2026-09-23)
+
+Viewing a listing shows what else on the board goes with it: a phone offers
+the cover, the screen guard and the power bank that are genuinely for sale.
+`GET /listings/:id/goes-with`, strip on the detail page.
+
+**This is the one genuinely RAG-shaped thing in the codebase.** Retrieve the
+listings actually on the board -> put them in the prompt -> ask which go with
+this one and why. It is RAG rather than a chatbot because of
+`crossSell.service.js#pick`: the model is shown a NUMBERED list and only
+numbers it was shown are accepted back, so it cannot recommend a phone case
+nobody is selling. Whatever it returns, what reaches a student is real
+listings from the list it was given.
+
+Measured on the live board, 2026-09-23: 18 listings, 7 generated, 4 from the
+map, 7 with nothing to suggest. Redmi Note 12 -> its cover and screen guard;
+the planted decoy (another phone) correctly not suggested; Cengel
+Thermodynamics -> the Casio calculator, which nobody wrote down anywhere.
+
+Decisions that are not obvious from the code:
+
+- **Candidates are NOT the nearest listings.** Nearest-by-embedding finds
+  SUBSTITUTES — other phones — and a cross-sell wants COMPLEMENTS. Reaching
+  for the semantic matcher here is the obvious move and it is wrong. The
+  model gets a broad slice of the board and does the picking.
+- **Numbered, not by id.** An ObjectId is 24 characters the model has to
+  copy back perfectly; one wrong character is a dead suggestion. A small
+  integer is hard to get wrong and trivial to validate.
+- **Nothing runs on a request path.** The hourly job (`:15`, offset from the
+  other two) writes `goesWith` onto the listing; the page reads it. A model
+  that is slow or down costs a little quality, never a page — and a demo
+  cannot fail live, because the demo reads MongoDB.
+- **Three layers: cached -> generator -> hand-written map.**
+  `matchers/companions.js` is the map, and it is also why this works at all
+  on a small board. Collaborative filtering ("people who bought X also
+  bought Y") needs thousands of transactions; there are about three deals.
+- **The empty state is the feature.** Most listings have no companion for
+  sale. `missingFor` names what is absent and the page offers to post a
+  wanted request, which the matcher then answers — browse -> cross-sell ->
+  wanted post -> semantic match -> notification.
+
+Two things the free tier taught us on the day:
+
+- **`MODELS` is a list, not a model.** `gemini-2.5-flash` and
+  `-2.5-flash-lite` answer 404 "no longer available to new users";
+  `gemini-3.5-flash-lite`, `3.1-flash-lite`, `3.8-flash` and `flash-latest`
+  answered 503 "high demand". `gemini-flash-lite-latest` worked in 36s. So
+  the generator tries several and remembers which answered.
+- **The timeout is 90 seconds**, which is absurd for a web request and right
+  here. At the 20s originally used, every single call timed out and every
+  listing silently fell back to the map — the feature looked like it worked.
+
+Scripts: `npm run crosssell:run` (or `-- --all` to ignore the cache) does
+what the job does, without Redis. `npm run seed:demo` now seeds companion
+pairs and a decoy of the same kind as each anchor, because the mistake this
+feature makes is suggesting a substitute and nothing catches that if there is
+no substitute to be tempted by.
+
 Still open, and worth knowing before the AI work starts:
 - `services/ai.service.js` (`suggestPrice`, `getScamScore`, `gpt-4o-mini`)
   is **dead code** — nothing has ever imported it.

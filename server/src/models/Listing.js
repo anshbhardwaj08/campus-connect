@@ -55,6 +55,27 @@ const listingSchema = new mongoose.Schema(
       select: false,
       default: undefined,
     },
+    // "Goes with this" — the cross-sell, written by the hourly job and read
+    // straight off the document on a page view, so no model is ever on a
+    // request path. `source` records whether a generator wrote these or the
+    // hand-written map did, which is the difference between the feature
+    // being RAG and being a lookup; without it there is no way to tell
+    // afterwards which one a given listing got.
+    goesWith: {
+      type: {
+        items: [
+          {
+            _id: false,
+            listingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Listing' },
+            reason: String,
+          },
+        ],
+        source: { type: String, enum: ['generated', 'map', 'none'] },
+        at: Date,
+      },
+      select: false,
+      default: undefined,
+    },
     scamScore: { type: Number, default: 0 },
   },
   { timestamps: true }

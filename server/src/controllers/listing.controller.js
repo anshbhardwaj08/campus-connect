@@ -2,6 +2,7 @@ const Listing = require('../models/Listing');
 const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
+const { goesWithFor } = require('../services/crossSell.service');
 const { paginate, buildPagination } = require('../utils/paginate');
 const calculateScamScore = require('../utils/scamScore');
 const { excludeBlocked } = require('../utils/blockedUsers');
@@ -185,6 +186,22 @@ const getSimilar = catchAsync(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, { listings: similar }, 'Similar listings fetched'));
 });
 
+// GET /listings/:id/goes-with
+//
+// Reads the cached answer the hourly job wrote. No model is called here and
+// none ever should be: this is a page load, and a student should not wait on
+// a language model to see a listing.
+const getGoesWith = catchAsync(async (req, res) => {
+  const listing = await Listing.findById(req.params.id).select('_id');
+  if (!listing) throw new ApiError(404, 'Listing not found');
+
+  const { items, source } = await goesWithFor(listing._id);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { items, source }, 'Goes-with fetched'));
+});
+
 module.exports = {
   create,
   getAll,
@@ -196,4 +213,5 @@ module.exports = {
   relist,
   incrementView,
   getSimilar,
+  getGoesWith,
 };

@@ -10,6 +10,7 @@ const router = express.Router();
 router.get('/', listingController.getAll);
 router.get('/:id', listingController.getById);
 router.get('/:id/similar', listingController.getSimilar);
+router.get('/:id/goes-with', listingController.getGoesWith);
 router.patch('/:id/view', listingController.incrementView);
 
 router.use(verifyAccessToken);

@@ -15,6 +15,7 @@
     "grandfather-verified": "node scripts/grandfather-verified.js",
     "match:compare": "node scripts/match-compare.js",
     "match:run": "node scripts/match-run.js",
+    "crosssell:run": "node scripts/crosssell-run.js",
     "seed:demo": "node scripts/seed-demo-listings.js"
   },
   "dependencies": {

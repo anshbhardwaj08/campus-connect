@@ -19,7 +19,9 @@
 //              WANTED_MATCHER=semantic then the switch bought nothing
 //   neither    a control. If anything matches these, the threshold is wrong
 //
-// Run `npm run match:compare` straight afterwards to see the two columns.
+// Run `npm run match:compare` straight afterwards to see the two columns,
+// and `npm run crosssell:run` to fill in "Goes with this" for the pairs at
+// the bottom of the listing fixtures.
 
 require('dotenv').config();
 const dns = require('dns');
@@ -78,6 +80,50 @@ const LISTINGS = [
     title: 'Nike running shoes, size 9',
     description: 'Worn a handful of times, too small for me.',
     price: 2200, category: 'clothing', condition: 'like-new',
+  },
+
+  // --- pairs, for "Goes with this" --------------------------------------
+  //
+  // Cross-sell can only suggest what is actually on the board, so the board
+  // has to contain the pairs. Each anchor below has its companions listed
+  // too, and a decoy of the same KIND as the anchor — another phone, another
+  // cycle — because the mistake this feature makes is recommending a
+  // substitute instead of a complement, and nothing catches that if there is
+  // no substitute to be tempted by.
+  {
+    title: 'Redmi Note 12, 128GB',
+    description: 'Two years old, battery still fine. Box and bill included.',
+    price: 8000, category: 'electronics', condition: 'used',
+  },
+  {
+    title: 'Silicone back cover for Redmi Note 12',
+    description: 'Clear, barely used. Bought the wrong size.',
+    price: 150, category: 'electronics', condition: 'like-new',
+  },
+  {
+    title: 'Tempered glass screen guard, Redmi',
+    description: 'Unopened pack of two.',
+    price: 100, category: 'electronics', condition: 'new',
+  },
+  {
+    title: '20000mAh power bank',
+    description: 'Charges a phone about four times. Type-C in and out.',
+    price: 900, category: 'electronics', condition: 'used',
+  },
+  {
+    title: 'iPhone 11, 64GB',
+    description: 'Decoy: another phone. A cross-sell must NOT suggest this.',
+    price: 16000, category: 'electronics', condition: 'used',
+  },
+  {
+    title: 'Cycle lock with keys',
+    description: 'Hardened chain, two keys. Used one semester.',
+    price: 250, category: 'cycles', condition: 'used',
+  },
+  {
+    title: 'Cycling helmet, medium',
+    description: 'Never had a fall in it.',
+    price: 600, category: 'cycles', condition: 'like-new',
   },
 ];
 

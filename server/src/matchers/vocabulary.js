@@ -111,6 +111,18 @@ const CONCEPTS = {
   // --- other ---
   ticket: ['tickets', 'pass', 'passes', 'entry pass'],
   cyclelock: ['cycle lock', 'chain lock', 'number lock'],
+
+  // --- the things that go WITH other things ---------------------------
+  // Added for the cross-sell in matchers/companions.js. Deliberately no
+  // bare 'case' or 'cover': a guitar case and a pillow cover are not phone
+  // accessories, and one wrong synonym is worse than a missing one.
+  phonecase: ['phone case', 'mobile case', 'phone cover', 'mobile cover', 'back cover', 'flip cover'],
+  screenguard: ['screen guard', 'screen protector', 'tempered glass'],
+  cable: ['usb cable', 'charging cable', 'data cable', 'type c cable', 'aux cable', 'hdmi cable'],
+  pump: ['cycle pump', 'air pump', 'tyre pump', 'foot pump'],
+  coolingpad: ['cooling pad', 'laptop cooler', 'laptop stand'],
+  extension: ['extension board', 'extension cord', 'power strip', 'spike guard'],
+  mosquitonet: ['mosquito net', 'net'],
 };
 
 // Words that carry no information about WHAT is wanted. Without these,
