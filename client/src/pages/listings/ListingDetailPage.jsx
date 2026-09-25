@@ -12,6 +12,7 @@ import PageWrapper from '../../components/layout/PageWrapper';
 import ListingDetail from '../../components/listing/ListingDetail';
 import ListingGrid from '../../components/listing/ListingGrid';
 import GoesWith from '../../components/listing/GoesWith';
+import GoesWithCue from '../../components/listing/GoesWithCue';
 import Skeleton from '../../components/ui/Skeleton';
 import Button from '../../components/ui/Button';
 
@@ -20,6 +21,7 @@ export default function ListingDetailPage() {
   const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const viewRecorded = useRef(null);
+  const goesWithRef = useRef(null);
 
   const { data: listing, isLoading, isError } = useQuery({
     queryKey: ['listing', id],
@@ -148,10 +150,13 @@ export default function ListingDetailPage() {
       />
 
       <GoesWith
+        ref={goesWithRef}
         items={goesWith?.items || []}
         missing={isAuthenticated ? goesWith?.missing || [] : []}
         onAskFor={(want) => askForMutation.mutate(want)}
       />
+
+      <GoesWithCue items={goesWith?.items || []} targetRef={goesWithRef} />
 
       {similar?.length > 0 && (
         <section className="mt-6">

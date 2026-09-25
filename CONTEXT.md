@@ -1762,6 +1762,29 @@ Decisions that are not obvious from the code:
   wanted request, which the matcher then answers — browse -> cross-sell ->
   wanted post -> semantic match -> notification.
 
+**The cue (2026-09-25).** The strip sits below the photo, the description
+and the seller panel, so on a phone the one thing that might sell a second
+item was the one thing nobody saw. `GoesWithCue.jsx` is a bar that rises
+from the bottom edge naming what is down there and scrolls to it when
+tapped. Deliberately not a modal: a dialog over a listing somebody just
+chose to open interrupts the thing they came for, and the first instinct of
+anyone who meets one is to find the X. It removes itself the moment an
+IntersectionObserver says the section is on screen — which is also the
+moment it has done its job, so there is nothing to dismiss. It never appears
+at all on a window tall enough to show the section already. Motion is
+`cueIn` / `cueOut` in `lib/motion.js`, not gsap in the component.
+
+Two bugs found writing the test for it, both of the silent kind:
+
+- **The controller dropped `missing`.** `goesWithFor` returns it, the page
+  reads `goesWith.missing`, and the response never carried it — so the whole
+  "nobody is selling one, shall we ask?" half of the feature did nothing at
+  all, with no error anywhere.
+- **The e2e assertion was a race.** Suggestions are a SECOND round trip (the
+  query only starts once the listing has loaded), so they can land after
+  `page.go()` has gone quiet. Asserting straight after it passes on this
+  machine and fails on a slower one; the test waits for the text now.
+
 Two things the free tier taught us on the day:
 
 - **`MODELS` is a list, not a model.** `gemini-2.5-flash` and

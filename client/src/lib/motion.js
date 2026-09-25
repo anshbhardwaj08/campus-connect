@@ -138,4 +138,37 @@ export function drawIn(targets, vars = {}) {
   );
 }
 
+// A nudge that rises from the bottom edge of the screen, used for the scroll
+// cue on a listing. It comes UP rather than fading in, because the thing it
+// points at is below — the direction of the motion is the message.
+//
+// A little overshoot on the way in so it reads as landing rather than
+// sliding; none on the way out, which should be quick and unremarkable.
+export function cueIn(targets, vars = {}) {
+  if (!targets) return null;
+
+  if (prefersReducedMotion()) {
+    gsap.set(targets, { y: 0, opacity: 1 });
+    return null;
+  }
+
+  return gsap.fromTo(
+    targets,
+    { y: 30, opacity: 0 },
+    { y: 0, opacity: 1, duration: 0.44, ease: 'back.out(1.7)', ...vars }
+  );
+}
+
+export function cueOut(targets, vars = {}) {
+  if (!targets) return vars.onComplete?.();
+
+  if (prefersReducedMotion()) {
+    gsap.set(targets, { opacity: 0 });
+    vars.onComplete?.();
+    return null;
+  }
+
+  return gsap.to(targets, { y: 14, opacity: 0, duration: 0.22, ease: 'power2.in', ...vars });
+}
+
 export { gsap };

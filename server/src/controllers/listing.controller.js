@@ -195,11 +195,14 @@ const getGoesWith = catchAsync(async (req, res) => {
   const listing = await Listing.findById(req.params.id).select('_id');
   if (!listing) throw new ApiError(404, 'Listing not found');
 
-  const { items, source } = await goesWithFor(listing._id);
+  // `missing` is what obviously goes with this and is NOT for sale, which
+  // the page turns into an offer to post a wanted request. Dropping it here
+  // is how that whole half of the feature silently did nothing.
+  const { items, missing, source } = await goesWithFor(listing._id);
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { items, source }, 'Goes-with fetched'));
+    .json(new ApiResponse(200, { items, missing, source }, 'Goes-with fetched'));
 });
 
 module.exports = {

@@ -11,6 +11,7 @@
 // is a more useful screen than a hidden section. The ask writes a wanted
 // post, which the matcher then answers when somebody lists one.
 
+import { forwardRef } from 'react';
 import { Link } from 'react-router-dom';
 
 import Panel from '../ui/Panel';
@@ -18,11 +19,13 @@ import Button from '../ui/Button';
 
 const rupees = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
 
-export default function GoesWith({ items = [], missing = [], onAskFor }) {
+// forwardRef so the scroll cue can watch this section and take somebody to
+// it. See GoesWithCue.jsx.
+const GoesWith = forwardRef(function GoesWith({ items = [], missing = [], onAskFor }, ref) {
   if (!items.length && !missing.length) return null;
 
   return (
-    <section className="mt-6">
+    <section ref={ref} className="mt-6 scroll-mt-24">
       <h2 className="label-xs mb-2.5">Goes with this</h2>
 
       {items.length > 0 && (
@@ -78,4 +81,6 @@ export default function GoesWith({ items = [], missing = [], onAskFor }) {
       )}
     </section>
   );
-}
+});
+
+export default GoesWith;
