@@ -201,11 +201,20 @@ const resetPassword = catchAsync(async (req, res) => {
   // Clearing the token makes the link single-use. Clearing refreshToken
   // ends every other session: if someone else had got in with the old
   // password, resetting it is exactly the moment they should be thrown out.
+  //
+  // isEmailVerified is set here too, and that is not a shortcut. Opening a
+  // link sent to that inbox proves the same thing the verification link
+  // proves: the person holds the address. Without this an account that was
+  // never verified is stuck with no way out — login refuses it, registering
+  // again is a 409 because the address is taken, and a reset that succeeds
+  // changes nothing about why they are blocked. Students read that as "the
+  // reset email does not work".
   await User.updateOne(
     { _id: user._id },
     {
       passwordHash,
       refreshToken: null,
+      isEmailVerified: true,
       $unset: { passwordResetToken: 1, passwordResetExpires: 1 },
     }
   );

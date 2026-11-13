@@ -210,6 +210,34 @@ describe('forgotten password', () => {
     assert.equal(res.status, 400);
   });
 
+  // A student who never opened the verification link is otherwise stuck for
+  // good: login refuses them, registering again is a 409, and before this a
+  // successful reset left them refused for the very same reason. Opening a
+  // link sent to that inbox proves they hold the address, so it counts.
+  test('a reset also verifies an address that was never verified', async () => {
+    const stuck = await makeUser({ isEmailVerified: false });
+
+    const raw = crypto.randomBytes(32).toString('hex');
+    await User.updateOne(
+      { _id: stuck._id },
+      { passwordResetToken: sha256(raw), passwordResetExpires: new Date(Date.now() + 60000) }
+    );
+
+    const reset = await client().post('/auth/reset-password', {
+      token: raw,
+      password: 'a-brand-new-password',
+    });
+    assert.equal(reset.status, 200);
+    assert.equal((await User.findById(stuck._id)).isEmailVerified, true);
+
+    // The point of the fix: they can actually get in afterwards.
+    const login = await client().post('/auth/login', {
+      collegeEmail: stuck.collegeEmail,
+      password: 'a-brand-new-password',
+    });
+    assert.equal(login.status, 200);
+  });
+
   test('refuses an expired token', async () => {
     const raw = crypto.randomBytes(32).toString('hex');
     await User.updateOne(
