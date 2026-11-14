@@ -229,6 +229,53 @@ const checkAccounts = async () => {
 // connect means nobody new can ever get in, and the only symptom is a
 // student staring at "check your inbox". Worth finding out here instead.
 const checkMailer = async () => {
+  // The HTTP API is the transport that works on a host with SMTP blocked,
+  // so when it is configured it is the one worth checking — and checking it
+  // properly means asking Brevo, not trusting that a key is present.
+  if (process.env.BREVO_API_KEY) {
+    const from = process.env.MAIL_FROM || process.env.NODEMAILER_USER;
+    if (!from) {
+      fail(
+        'mail',
+        'BREVO_API_KEY is set but MAIL_FROM is not',
+        'Brevo needs a verified sender address to send from'
+      );
+      return;
+    }
+
+    try {
+      const res = await fetch('https://api.brevo.com/v3/account', {
+        headers: { 'api-key': process.env.BREVO_API_KEY, accept: 'application/json' },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (res.status === 401) {
+        fail('mail', 'Brevo rejected the API key', 'Check BREVO_API_KEY on the deployed service');
+        return;
+      }
+      if (!res.ok) {
+        fail('mail', `Brevo answered ${res.status}`, 'Mail will not send until this clears');
+        return;
+      }
+
+      const account = await res.json().catch(() => ({}));
+      const left = account?.plan?.find?.((p) => p.credits !== undefined)?.credits;
+      pass(
+        'mail',
+        `Brevo accepted the key, sending as ${from}` + (left !== undefined ? ` (${left} credits left)` : '')
+      );
+    } catch (err) {
+      fail('mail', `Could not reach Brevo: ${err.message}`, 'Mail will not send until this clears');
+    }
+    return;
+  }
+
+  warn(
+    'mail',
+    'No BREVO_API_KEY — falling back to SMTP',
+    'Fine locally. On Render free, outbound SMTP is blocked and no mail will ever arrive.'
+  );
+
   if (!process.env.NODEMAILER_USER || !process.env.NODEMAILER_PASS) {
     fail(
       'mail',

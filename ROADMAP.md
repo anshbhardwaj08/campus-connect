@@ -24,6 +24,23 @@ Sizes are rough: **S** under an hour, **M** half a day, **L** a day or more.
 
 ## Now
 
+### 0. Finish the email switch · **S** · *blocks sign-up on the deployed site*
+
+The code is done: `services/email.service.js` sends over Brevo's HTTP API
+when `BREVO_API_KEY` is set and falls back to SMTP otherwise. What is left
+is the account and the two environment variables.
+
+Render's free tier blocks outbound SMTP (25, 465, 587), so on the deployed
+service every verification and reset email hung for 120 seconds and then
+failed silently. Local SMTP is unaffected, which is why it never showed up
+in development.
+
+1. Create a Brevo account, verify `MAIL_FROM` as a sender.
+2. Set `BREVO_API_KEY` and `MAIL_FROM` on Render.
+3. `npm run preflight` — it now checks the key against Brevo and reports
+   which transport is live.
+
+
 ### 1. "More like this, under ₹X" · **S**
 
 Second row under the cross-sell strip. Nearly free — every listing already

@@ -19,19 +19,27 @@ const cookieOptions = {
   sameSite: 'lax',
 };
 
-// Mints a one-day link and mails it. A failed send is logged and swallowed
-// by every caller: the account exists either way, and the student can ask
-// for another link from the verify screen. Throwing here would leave them
-// with a 500 and an account they cannot register again for.
-const sendVerificationLink = async (user) => {
+// Mints a one-day link and starts mailing it. A failed send is logged and
+// swallowed: the account exists either way, and the student can ask for
+// another link from the verify screen. Throwing here would leave them with
+// a 500 and an account they cannot register again for.
+//
+// Deliberately NOT awaited by its callers. Handing a message to an SMTP
+// server takes as long as that server takes, and on a host where outbound
+// SMTP is blocked it takes until the TCP timeout — two minutes, measured on
+// the deployed service. Holding the HTTP response for that long turns a
+// working registration into a spinner that never resolves. The send is
+// started, the student is answered, and the outcome goes to the log.
+//
+// Returns the promise so a caller that genuinely needs the result (a test)
+// can await it; nothing on a request path should.
+const sendVerificationLink = (user) => {
   const token = jwt.sign({ userId: user._id }, process.env.JWT_ACCESS_SECRET, { expiresIn: '1d' });
   const verifyLink = `${process.env.CLIENT_URL}/verify-email?token=${token}`;
 
-  try {
-    await sendVerifyEmail(user.collegeEmail, verifyLink);
-  } catch (err) {
+  return sendVerifyEmail(user.collegeEmail, verifyLink).catch((err) => {
     winstonLogger.error(`Failed to send verification email to ${user.collegeEmail}: ${err.message}`);
-  }
+  });
 };
 
 // POST /auth/register
@@ -56,7 +64,7 @@ const register = catchAsync(async (req, res) => {
 
   emitAdminActivity('users');
 
-  await sendVerificationLink(user);
+  sendVerificationLink(user);
 
   return res
     .status(201)
@@ -99,7 +107,7 @@ const resendVerification = catchAsync(async (req, res) => {
   const SAME_ANSWER = 'If that account still needs verifying, a fresh link is on its way.';
 
   const user = await User.findOne({ collegeEmail });
-  if (user && !user.isEmailVerified) await sendVerificationLink(user);
+  if (user && !user.isEmailVerified) sendVerificationLink(user);
 
   return res.status(200).json(new ApiResponse(200, null, SAME_ANSWER));
 });
@@ -173,13 +181,16 @@ const forgotPassword = catchAsync(async (req, res) => {
     );
 
     const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${rawToken}`;
-    try {
-      await sendPasswordResetEmail(collegeEmail, resetLink);
-    } catch (err) {
+
+    // Started, not awaited — same reason as sendVerificationLink. This is
+    // the path that was holding the response for two minutes on a host
+    // with outbound SMTP blocked, so the screen showed a spinner and then
+    // "a link is on its way" for an email that was never sent.
+    sendPasswordResetEmail(collegeEmail, resetLink).catch((err) => {
       // The student still gets the same answer — telling them the mail
       // failed would leak that the account exists.
       winstonLogger.error(`Failed to send reset email to ${collegeEmail}: ${err.message}`);
-    }
+    });
   }
 
   return res.status(200).json(new ApiResponse(200, null, SAME_ANSWER));
