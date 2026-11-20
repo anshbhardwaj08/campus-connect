@@ -54,18 +54,19 @@ const smtpTransport = () => {
   return transporter;
 };
 
-const sendOverSmtp = ({ to, subject, html }) =>
+const sendOverSmtp = ({ to, subject, html, text }) =>
   smtpTransport().sendMail({
     from: `"${FROM_NAME}" <${senderAddress()}>`,
     to,
     subject,
     html,
+    ...(text ? { text } : {}),
   });
 
 // --- Brevo HTTP API -------------------------------------------------------
 // Node 22 has fetch built in, so this adds no dependency — which matters on
 // a host where the SMTP client was the only reason nodemailer was loaded.
-const sendOverHttp = async ({ to, subject, html }) => {
+const sendOverHttp = async ({ to, subject, html, text }) => {
   const res = await fetch(BREVO_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -78,6 +79,7 @@ const sendOverHttp = async ({ to, subject, html }) => {
       to: [{ email: to }],
       subject,
       htmlContent: html,
+      ...(text ? { textContent: text } : {}),
     }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
@@ -95,15 +97,35 @@ const sendOverHttp = async ({ to, subject, html }) => {
 };
 
 // --- the seam -------------------------------------------------------------
-const sendMail = ({ to, subject, html }) =>
-  (useHttpApi() ? sendOverHttp : sendOverSmtp)({ to, subject, html });
+const sendMail = ({ to, subject, html, text }) =>
+  (useHttpApi() ? sendOverHttp : sendOverSmtp)({ to, subject, html, text });
+
+// The link is deliberately NOT wrapped in an <a> tag, and must not be.
+//
+// Brevo rewrites every href it finds into a click-tracking redirect on
+// sendibt2.com, and those redirects answer 404 — so the anchor arrives
+// broken and the student sees "page not found" instead of a reset form.
+// Disabling link tracking is an Enterprise-only setting, and there is no
+// per-message switch in the API.
+//
+// Measured on 2026-11-20 by sending one message carrying the same URL both
+// ways: the href came back rewritten, the bare text came back untouched.
+// Gmail and every other mainstream client turn a bare URL into a link
+// themselves, so this reads the same to a student and actually works.
+const linkBlock = (url) =>
+  `<p style="word-break:break-all;font-family:monospace">${url}</p>
+   <p style="color:#555;font-size:13px">If that is not clickable, copy it into your browser.</p>`;
 
 const sendVerifyEmail = async (to, verifyLink) =>
   sendMail({
     to,
     subject: 'Verify your Campus Connect account',
-    html: `<p>Welcome to Campus Connect! Please verify your email by clicking the link below:</p>
-           <p><a href="${verifyLink}">${verifyLink}</a></p>`,
+    html: `<p>Welcome to Campus Connect! Verify your email by opening this link:</p>
+           ${linkBlock(verifyLink)}`,
+    text: `Welcome to Campus Connect. Verify your email by opening this link:
+
+${verifyLink}
+`,
   });
 
 const sendOTPEmail = async (to, otp) =>
@@ -118,9 +140,18 @@ const sendPasswordResetEmail = async (to, resetLink) =>
     to,
     subject: 'Reset your Campus Connect password',
     html: `<p>Someone asked to reset the password for this Campus Connect account.</p>
-           <p><a href="${resetLink}">${resetLink}</a></p>
+           ${linkBlock(resetLink)}
            <p>The link works once and expires in an hour. If this was not you,
               ignore this email — nothing has changed.</p>`,
+    text:
+      `Someone asked to reset the password for this Campus Connect account.
+
+` +
+      `${resetLink}
+
+` +
+      `The link works once and expires in an hour. If this was not you, ignore this email.
+`,
   });
 
 const sendDealAlertEmail = async (to, dealDetails) =>

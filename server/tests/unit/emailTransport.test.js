@@ -69,6 +69,25 @@ describe('email transport', () => {
     assert.match(sent.htmlContent, /https:\/\/example\.test\/reset\?token=x/);
   });
 
+  // Brevo rewrites every href into a click-tracking redirect, and those
+  // redirects answer 404 — a reset link wrapped in an anchor arrives broken.
+  // Bare text is left alone, so the absence of an anchor around the URL is
+  // load-bearing, not a style choice.
+  test('token links are sent as bare text, never wrapped in an anchor', async () => {
+    const calls = stubFetch();
+    const url = 'https://example.test/reset?token=abc123';
+
+    await mailer.sendPasswordResetEmail('student@pec.edu.in', url);
+    const reset = JSON.parse(calls[0].options.body);
+    assert.ok(reset.htmlContent.includes(url), 'the url must be present');
+    assert.ok(!/<a[^>]*href/i.test(reset.htmlContent), 'no anchor may wrap it');
+    assert.ok(reset.textContent.includes(url), 'and a plain-text part carries it too');
+
+    await mailer.sendVerifyEmail('student@pec.edu.in', url);
+    const verify = JSON.parse(calls[1].options.body);
+    assert.ok(!/<a[^>]*href/i.test(verify.htmlContent), 'the verify link too');
+  });
+
   test('a refusal carries Brevo’s reason, not just a status code', async () => {
     stubFetch({
       ok: false,
