@@ -3,6 +3,7 @@ const catchAsync = require('../utils/catchAsync');
 const ApiError = require('../utils/ApiError');
 const ApiResponse = require('../utils/ApiResponse');
 const { goesWithFor } = require('../services/crossSell.service');
+const { similarTo } = require('../matchers/retrieve');
 const { paginate, buildPagination } = require('../utils/paginate');
 const calculateScamScore = require('../utils/scamScore');
 
@@ -10,6 +11,11 @@ const calculateScamScore = require('../utils/scamScore');
 // pass. Five fills less than one row of cards, which is the point at which
 // the page reads as "nothing here" to a student.
 const DEEP_SEARCH_FLOOR = 5;
+
+// A row, not a wall — the same reason the cross-sell strip shows four. It
+// also means the marginal matches at the bottom of the ranking mostly never
+// get a slot: they only appear when there are fewer than four good ones.
+const MAX_SIMILAR = 4;
 const { excludeBlocked } = require('../utils/blockedUsers');
 const { emitAdminActivity } = require('../services/adminFeed.service');
 
@@ -231,20 +237,93 @@ const incrementView = catchAsync(async (req, res) => {
 });
 
 // GET /listings/:id/similar
+//
+// "More like this, under ₹X" — SUBSTITUTES: other listings that are the
+// same kind of thing and cost no more. This is the exact opposite question
+// to the goes-with strip directly above it on the page, which wants
+// COMPLEMENTS, and the two have to be kept apart deliberately (see below).
+//
+// It used to be "same category, newest first", which answered neither
+// question: it put a ₹40,000 laptop under a ₹900 calculator because both
+// are electronics, and it ranked by nothing a shopper cares about.
 const getSimilar = catchAsync(async (req, res) => {
-  const listing = await Listing.findById(req.params.id);
+  // `+embedding` because similarTo compares cached vectors; `+goesWith`
+  // because whatever the cross-sell already picked must not appear twice on
+  // one page. Both are `select: false` on the model.
+  const listing = await Listing.findById(req.params.id).select('+embedding +goesWith');
   if (!listing) throw new ApiError(404, 'Listing not found');
 
-  const similar = await Listing.find({
+  // The two things the row's own heading promises, so both filter rather
+  // than rank:
+  //   price      "under ₹X" has to be true of everything in the row
+  //   type       a hire rate against a sale price is meaningless — ₹120/day
+  //              is not "cheaper than" a ₹2,100 bike, it is a different
+  //              kind of number
+  const eligible = {
+    ...(await excludeBlocked('sellerId')),
+    listingType: listing.listingType,
+    ...(typeof listing.price === 'number' ? { price: { $lte: listing.price } } : {}),
+  };
+
+  // Whatever the strip above is already showing, removed.
+  //
+  // This is not tidying, it is the one thing that makes the row work.
+  // Meaning cannot tell a substitute from a complement: measured on real
+  // embeddings, a phone and its own back cover score 0.858 while two
+  // different phones score 0.832, because a thing and its companion get
+  // described in the same words. No threshold separates them, so the
+  // cross-sell's answers are subtracted instead of argued with.
+  const companions = new Set((listing.goesWith?.items || []).map((i) => String(i.listingId)));
+
+  // Ask for enough that dropping the companions cannot leave a short row.
+  const hits = await similarTo(listing, {
+    filter: eligible,
+    limit: MAX_SIMILAR + companions.size,
+  });
+
+  const ranked = hits
+    .map((h) => h.listing)
+    .filter((l) => !companions.has(String(l._id)))
+    .slice(0, MAX_SIMILAR);
+
+  if (ranked.length) {
+    // Populated separately because retrieval works on lean documents, then
+    // put back into retrieval's order — a `$in` query returns `_id` order,
+    // which means nothing to a shopper, and the whole point here is that
+    // the best match is first.
+    const populated = await Listing.find({ _id: { $in: ranked.map((l) => l._id) } }).populate(
+      'sellerId',
+      'name avatar trustScore isEmailVerified'
+    );
+    const byId = new Map(populated.map((l) => [String(l._id), l]));
+    const ordered = ranked.map((l) => byId.get(String(l._id))).filter(Boolean);
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, { listings: ordered, source: 'semantic' }, 'Similar listings fetched'));
+  }
+
+  // Nothing retrieved. Three ways that happens and all of them are
+  // ordinary: this listing was posted in the last hour so the job has not
+  // written its vector yet, no embedding provider is configured, or there
+  // genuinely is nothing close enough on the board.
+  //
+  // So: same category, newest first — what this endpoint used to do — but
+  // keeping the price and type constraints, because the heading above the
+  // row promises them whichever way the row was filled.
+  const fallback = await Listing.find({
     _id: { $ne: listing._id },
     category: listing.category,
     status: 'active',
-    ...(await excludeBlocked('sellerId')),
+    ...eligible,
   })
-    .limit(8)
-    .sort({ createdAt: -1 });
+    .populate('sellerId', 'name avatar trustScore isEmailVerified')
+    .sort({ createdAt: -1 })
+    .limit(MAX_SIMILAR);
 
-  return res.status(200).json(new ApiResponse(200, { listings: similar }, 'Similar listings fetched'));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { listings: fallback, source: 'category' }, 'Similar listings fetched'));
 });
 
 // GET /listings/:id/goes-with

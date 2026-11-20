@@ -53,7 +53,7 @@ is why there is no supertest and nothing is mocked.
 
 ## What it covers
 
-327 tests.
+339 tests.
 
 | File | | What it is for |
 |---|---|---|
@@ -69,6 +69,7 @@ is why there is no supertest and nothing is mocked.
 | `api/ban` | 14 | every surface a suspension has to hide |
 | `api/listings` | 15 | browse, filters, who may change a listing |
 | `api/retrieval` | 8 | retrieval on browse search and saved-search alerts, and when it may run |
+| `api/similar` | 12 | "more like this, under ₹X" — ranking, the price rule, the fallback |
 | `api/semanticMatcher` | 15 | the matcher's machinery: caching, batching, staleness, fallback |
 | `api/wantedMatch` | 18 | which listings answer a wanted post, and what the student is told |
 | `api/crossSell` | 22 | "goes with this" — what the app does with whatever a model returns |

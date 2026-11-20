@@ -24,44 +24,55 @@ Sizes are rough: **S** under an hour, **M** half a day, **L** a day or more.
 
 ## Now
 
-### 0. Finish the email switch · **S** · *blocks sign-up on the deployed site*
-
-The code is done: `services/email.service.js` sends over Brevo's HTTP API
-when `BREVO_API_KEY` is set and falls back to SMTP otherwise. What is left
-is the account and the two environment variables.
+### 0. Set the two mail vars on Render · **S** · *blocks sign-up on the deployed site*
 
 Render's free tier blocks outbound SMTP (25, 465, 587), so on the deployed
 service every verification and reset email hung for 120 seconds and then
 failed silently. Local SMTP is unaffected, which is why it never showed up
 in development.
 
-1. Create a Brevo account, verify `MAIL_FROM` as a sender.
-2. Set `BREVO_API_KEY` and `MAIL_FROM` on Render.
-3. `npm run preflight` — it now checks the key against Brevo and reports
-   which transport is live.
+**Everything except the Render dashboard is done** (checked 2026-11-20):
+
+- [x] `services/email.service.js` sends over Brevo's HTTP API when
+      `BREVO_API_KEY` is set, SMTP otherwise.
+- [x] Brevo account exists, sender verified. `npm run preflight` locally:
+      *"Brevo accepted the key, sending as …, 292 credits left."*
+- [x] `BREVO_API_KEY` and `MAIL_FROM` are in `server/.env`.
+- [x] Both added to `render.yaml` as `sync: false` — **they were missing**,
+      so a Blueprint deploy never asked for them and the service fell
+      straight back to blocked SMTP. That was the whole remaining bug.
+- [ ] **Set `BREVO_API_KEY` and `MAIL_FROM` on the deployed service**:
+      Render → `campus-connect` → Environment → Add, then let it redeploy.
+      Copy both values out of `server/.env`.
+- [ ] Confirm end to end: open
+      `https://campus-connect-94sq.onrender.com`, use *forgot password* on
+      an address that has an account, and check the mail arrives. It should
+      answer in about a second — if it sits there for two minutes, the key
+      did not take.
+
+Only 292 Brevo credits remain, which is the free tier's monthly allowance
+and plenty for a campus, but it is a budget rather than a tap.
 
 
-### 1. "More like this, under ₹X" · **S**
+### 1. The live board is empty · **S** · *was "remove the demo data"*
 
-Second row under the cross-sell strip. Nearly free — every listing already
-carries a vector, so this is one cosine query plus a price filter.
+Checked 2026-11-20: `demo.seed@pec.edu.in` is gone and **`listings` holds
+zero documents**, so there is nothing left to remove — this item is done in
+the sense it was written. What replaced it is the opposite problem: 14 users,
+13 wanted posts, 7 lost-and-found items, 3 carpools and 2 deals remain, and
+not one listing for any of them to be about.
 
-This is what "suggest things at the same price" should mean: similarity
-**filtered** by price, not similarity **of** price. A ₹900 calculator and
-₹900 running shoes have nothing to do with each other, and there is no good
-answer to "why price?".
-
-### 2. Remove the demo data before any real launch · **S**
-
-`npm run seed:demo -- --for <email> --remove --commit`. Fifteen listings and
-seven wanted posts are on the live board right now, under
-`demo.seed@pec.edu.in`.
+That makes everything built on the board invisible and unmeasurable:
+cross-sell, "more like this", browse search and `npm run similar:run` all
+have nothing to work on. Re-seed with `npm run seed:demo -- --for <email>`
+before demoing or tuning anything, and keep the remove command
+(`-- --for <email> --remove --commit`) for the real launch.
 
 ---
 
 ## Next
 
-### 3. The scam gate cannot fire · **S** · *bug*
+### 2. The scam gate cannot fire · **S** · *bug*
 
 `utils/scamScore.js` is called as `calculateScamScore(req.body)`, but
 `categoryAvgPrice` is never in the body, so the 40-point price branch never
@@ -72,7 +83,7 @@ unreachable by that path.
 Fix the arithmetic, pass a real category average, and add a test that proves
 a listing can actually reach the queue.
 
-### 4. A rental request is scored against sale prices · **S** · *bug*
+### 3. A rental request is scored against sale prices · **S** · *bug*
 
 A live wanted post reads `cycle`, `maxBudget: 100`, description *"for one
 hour"* — somebody wanting to **rent**. It matches nothing, correctly by the
@@ -80,7 +91,7 @@ current rules and uselessly in fact: `LookingFor` has no `listingType`, so an
 hourly budget is compared against a ₹4,200 sale price. No matcher can fix
 this; the model needs the field.
 
-### 5. Delete `services/ai.service.js` · **S**
+### 4. Delete `services/ai.service.js` · **S**
 
 `suggestPrice` and `getScamScore` were written and never imported by
 anything, and are now superseded: generation lives in `src/generators/`, on
@@ -91,7 +102,7 @@ code. Drop the `openai` dependency with it — nothing else uses it.
 
 ## Later
 
-### 6. Make it installable (PWA) · **M**
+### 5. Make it installable (PWA) · **M**
 
 `CLAUDE.md` calls the client a PWA. There is no manifest and no service
 worker — it is not one. Adding them buys "Add to Home Screen": real icon,
@@ -99,20 +110,20 @@ fullscreen, no browser chrome.
 
 **Do this before Capacitor.** Most of the benefit, none of the auth problem.
 
-### 7. Fix the cold start · **S** · *blocks 6 and 8*
+### 6. Fix the cold start · **S** · *blocks 5 and 7*
 
 Render's free tier spins the server down after inactivity, so a cold open
 takes the better part of a minute. An app icon that hangs for fifty seconds
 is uninstalled once and never opened again. An uptime ping or the paid tier.
 
-### 8. Capacitor · **L**
+### 7. Capacitor · **L**
 
 The packaging is the easy part. The real work: in a Capacitor WebView the
 origin is `capacitor://localhost`, so the httpOnly `sameSite: lax` cookies
 are not sent to the Render domain and **every request returns 401**. Needs a
 token auth path alongside the cookie one.
 
-### 9. Housekeeping
+### 8. Housekeeping
 
 - [ ] **Rotate the Redis password** — it was legible in a screenshot on
       2026-09-22 and should be treated as public. Redis Cloud -> Security ->

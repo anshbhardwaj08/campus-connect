@@ -32,6 +32,33 @@ const EMBED_BUDGET_PER_RUN = 200;
 // provider.
 const THRESHOLD = Number(process.env.SEMANTIC_THRESHOLD) || 0.66;
 
+// A HIGHER bar than the one above, and not a matter of taste. 0.66 scores a
+// short query ("cycle") against a whole listing; this scores two whole
+// listings against each other, and two documents of similar length and
+// register sit closer together than a three-word phrase sits to either.
+//
+// Measured, not guessed — `scripts/similar-run.js` does this on a real
+// board, and an 18-listing hand-built one gave, on
+// `gemini-embedding-001` (768 dims):
+//
+//   same kind (two bicycles, two calculators)   0.822 - 0.923
+//   same category, different thing              up to 0.858
+//   different category                          up to 0.823
+//
+// So the bands OVERLAP and no threshold separates them cleanly. That is
+// worth understanding rather than tuning around: the pairs that break it
+// are COMPLEMENTS — a phone and its own back cover score 0.858, a
+// calculator and a maths textbook 0.823 — because a thing and its
+// companion get described in the same words. Meaning cannot tell "instead
+// of this" from "along with this".
+//
+// Hence 0.80 and not higher: it clears every same-kind pair with room to
+// spare (the worst was 0.822, and the bicycles are the hard case this
+// feature exists for), and the complements that sneak past it are dropped
+// by the caller instead, which knows what the cross-sell already picked.
+// Raising it to 0.84 to shut them out took the bicycles with it.
+const SIMILAR_THRESHOLD = Number(process.env.SIMILAR_THRESHOLD) || 0.8;
+
 const textOf = (doc) => [doc.title, doc.description];
 
 const createRetriever = (embedder) => {
@@ -135,7 +162,61 @@ const createRetriever = (embedder) => {
     }
   };
 
-  return { semanticSearch, THRESHOLD };
+  /**
+   * Listings that are the same KIND of thing as `anchor`, closest first.
+   *
+   * The opposite question to the cross-sell: that one wants complements
+   * (a phone -> its case), this one wants substitutes (a phone -> other
+   * phones). Nearest-by-embedding is the wrong tool there and the right
+   * one here.
+   *
+   * **Nothing here touches the network.** It compares cached vectors and
+   * nothing else: no embedding call, no cache write, no provider check.
+   * That is what makes it safe on a listing page, which is an ordinary
+   * page load rather than something the student asked for — the rule
+   * browse search obeys with its `deep` gate. A listing whose vector the
+   * hourly job has not written yet simply has no row, and the caller falls
+   * back to something cheap.
+   *
+   * `anchor` must have been read with `+embedding`, since both models hide
+   * it by default.
+   *
+   * @param {object} anchor              a Listing document, embedding selected
+   * @param {object} options.filter      which listings are eligible (a Mongo filter)
+   * @param {number} options.limit       how many to return
+   * @param {number} options.threshold   minimum cosine score
+   * @returns {Promise<Array<{ listing, score }>>}  empty when there is no usable vector
+   */
+  const similarTo = async (anchor, { filter = {}, limit = 6, threshold = SIMILAR_THRESHOLD } = {}) => {
+    const model = embedder.describe().model;
+    if (!anchor || !isFresh(anchor.embedding, sourceHash(...textOf(anchor)), model)) return [];
+
+    // Not wrapped in a try/catch, unlike semanticSearch. There is no
+    // provider to fall over here, so the only thing that can fail is the
+    // database — and the caller's fallback needs the database too, so
+    // swallowing it would turn a dead page into a confusingly empty one.
+    const candidates = await Listing.find({ status: 'active', _id: { $ne: anchor._id }, ...filter })
+      .select('+embedding')
+      .sort({ createdAt: -1 })
+      .limit(CANDIDATE_CAP)
+      .lean();
+
+    return candidates
+      .map((listing) => {
+        // Cached or nothing. A stale vector is skipped rather than
+        // refreshed: refreshing is the hourly job's business.
+        if (!isFresh(listing.embedding, sourceHash(...textOf(listing)), model)) return null;
+        return {
+          listing,
+          score: Math.max(0, Math.min(1, cosine(anchor.embedding.vector, listing.embedding.vector))),
+        };
+      })
+      .filter((m) => m && m.score >= threshold)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  };
+
+  return { semanticSearch, similarTo, THRESHOLD, SIMILAR_THRESHOLD };
 };
 
 module.exports = createRetriever(defaultEmbedder);

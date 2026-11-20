@@ -40,18 +40,41 @@ Render service.
    URLs. Those are expected, because Render sets both.
 3. **MongoDB Atlas:** Network Access → Add IP Address → `0.0.0.0/0`. Render's
    free plan has no fixed outgoing IP address.
-4. **Gmail — this one is load-bearing.** `NODEMAILER_PASS` must be a Gmail
-   **app password** (Google Account → Security → 2-Step Verification → App
-   passwords), not the account password.
+4. **Mail — this one is load-bearing, and SMTP will not do.**
 
-   Signing in now requires a verified college address, so the verification
-   email is the only door into the product: if mail does not send, **no new
-   student can ever get in**, and the only symptom is somebody looking at
-   "check your inbox" forever. `npm run preflight` connects to SMTP and
-   logs in for real, and FAILs if it cannot — do not skip it.
+   Signing in requires a verified college address, so the verification email
+   is the only door into the product: if mail does not send, **no new student
+   can ever get in**, and the only symptom is somebody looking at "check your
+   inbox" forever.
 
-   Port 587 outbound must be open. Some hosts block 465, which is why the
-   transport uses 587 + STARTTLS.
+   **Render's free tier blocks outbound SMTP** (25, 465 and 587). It drops
+   the connection instead of refusing it, so nodemailer waits on the OS TCP
+   timeout — measured on the deployed service, a password reset took 120.5
+   seconds and then failed silently. Nothing in a log says "blocked". So on
+   Render, mail goes over Brevo's HTTP API on 443 and SMTP is only the local
+   fallback:
+
+   - `BREVO_API_KEY` — from Brevo → SMTP & API → API keys.
+   - `MAIL_FROM` — an address verified as a sender under Brevo → Senders.
+     One mailbox is enough; no DNS access needed.
+
+   Both are in `render.yaml` as `sync: false`, so the Blueprint asks for
+   them. `npm run preflight` asks Brevo whether the key is good and prints
+   the sender and the remaining credits, and FAILs if it is not — do not
+   skip it. With no key it only WARNs, because SMTP is correct locally; that
+   warning is a FAIL in everything but name on Render.
+
+   If you keep the SMTP fallback for local work, `NODEMAILER_PASS` must be a
+   Gmail **app password** (Google Account → Security → 2-Step Verification →
+   App passwords), not the account password.
+
+   **One real trap:** Brevo rewrites every `href` it finds into a
+   click-tracking redirect on `sendibt2.com`, and those redirects answer
+   **404** — so a verification link inside an `<a>` tag arrives broken.
+   Disabling link tracking is Enterprise-only and there is no per-message
+   switch. `email.service.js` therefore sends bare URLs in a `<p>`, never
+   anchors, and every mainstream client linkifies them anyway. Do not
+   "improve" those emails by wrapping the links.
 5. **Push** everything to GitHub.
 
 ## Deploy on Render

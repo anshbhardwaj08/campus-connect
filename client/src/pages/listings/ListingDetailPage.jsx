@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import api from '../../services/api';
 import apiErrorMessage from '../../utils/apiError';
+import formatPrice from '../../utils/formatPrice';
 import { useAuth } from '../../hooks/useAuth';
 import PageWrapper from '../../components/layout/PageWrapper';
 import ListingDetail from '../../components/listing/ListingDetail';
@@ -28,6 +29,8 @@ export default function ListingDetailPage() {
     queryFn: () => api.get(`/listings/${id}`).then((r) => r.data.data.listing),
   });
 
+  // Substitutes — the opposite question to the goes-with strip. The server
+  // applies the price ceiling, so the heading below can promise it.
   const { data: similar } = useQuery({
     queryKey: ['listing', id, 'similar'],
     queryFn: () => api.get(`/listings/${id}/similar`).then((r) => r.data.data.listings),
@@ -160,8 +163,15 @@ export default function ListingDetailPage() {
 
       {similar?.length > 0 && (
         <section className="mt-6">
-          <h2 className="label-xs mb-2.5">More like this</h2>
-          <ListingGrid listings={similar.slice(0, 6)} />
+          {/* The ceiling is named because it is the promise: everything in
+              this row costs this or less. A free item has no ceiling worth
+              stating — "under Free" is nonsense — so it keeps the plain
+              heading. The server decides how many, so there is no slice
+              here to disagree with it. */}
+          <h2 className="label-xs mb-2.5">
+            {listing.price > 0 ? `More like this, under ${formatPrice(listing.price)}` : 'More like this'}
+          </h2>
+          <ListingGrid listings={similar} />
         </section>
       )}
     </PageWrapper>

@@ -39,6 +39,21 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      # Mail. Render's free tier BLOCKS outbound SMTP (25, 465, 587) and
+      # drops the connection rather than refusing it, so nodemailer waits on
+      # the OS TCP timeout: a password reset took 120.5s on the deployed
+      # service and the mail never left. So on Render the HTTP API is not
+      # optional — without BREVO_API_KEY nothing sends, and because signing
+      # in requires a verified address, NO NEW STUDENT CAN GET IN. The only
+      # symptom is somebody looking at "check your inbox" forever.
+      - key: BREVO_API_KEY
+        sync: false
+      # The sender Brevo has verified. A single address is enough, so this
+      # can be an ordinary mailbox — no DNS access needed.
+      - key: MAIL_FROM
+        sync: false
+      # The SMTP fallback. Used only when BREVO_API_KEY is absent, which on
+      # this host means not at all — kept because it is what runs locally.
       - key: NODEMAILER_USER
         sync: false
       - key: NODEMAILER_PASS
@@ -47,9 +62,11 @@ services:
       # saved-search alerts, wanted-post matching). The site works without it.
       - key: REDIS_URL
         sync: false
-      # Optional: only the semantic wanted-post matcher uses these, and only
-      # when WANTED_MATCHER=semantic. Without a real key the matcher falls
-      # back to the hand-written vocabulary and nothing else changes.
+      # No longer just the wanted matcher: embeddings now also back browse's
+      # deep search, "more like this, under Rs X", and saved-search alerts.
+      # The first two degrade quietly (keyword results, a category row), but
+      # a SAVED SEARCH WITH TEXT GOES SILENT without a key — it has no
+      # keyword fallback by design. Set this if alerts are meant to fire.
       # GEMINI_API_KEY is the free one and wins when both are set.
       - key: GEMINI_API_KEY
         sync: false

@@ -15,7 +15,10 @@ verified against the live API.
   GO *and* the keywords came up short — a retrieval pass, so "bike" finds a
   cycle. The masthead box is the only one at desktop width and submits the
   same way
-- **Listings** — detail page, post, edit. Photos via Cloudinary
+- **Listings** — detail page, post, edit. Photos via Cloudinary. The detail
+  page carries two rows that answer opposite questions: "Goes with this"
+  (complements, written by the hourly job) and "More like this, under ₹X"
+  (substitutes, ranked by meaning and capped at the listing's own price)
 - **Renting** — a listing is either **for sale or for rent**, never both. A
   rental carries a rate (`price`) per `rentPeriod` (day/week/month) and an
   optional `securityDeposit`. The sell form switches between the two; the

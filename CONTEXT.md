@@ -1920,6 +1920,105 @@ because both callers resolve it late.
 Full suite: 327 passing. `docs/testing.md` had a coverage table claiming
 157 and missing seven files; it is current now.
 
+## "More like this, under ₹X" — the substitutes row (2026-11-20)
+
+The second row under the cross-sell strip, and the other half of the pair:
+goes-with answers *what else do I need*, this answers *what else could I buy
+instead*. `GET /listings/:id/similar`.
+
+**The endpoint already existed and answered neither question.** It was
+`category + newest, limit 8` — which put a ₹40,000 laptop under a ₹900
+calculator because both are electronics, and ordered by a date no shopper
+cares about. It now ranks by meaning and filters by price.
+
+`matchers/retrieve.js` gained `similarTo`, next to `semanticSearch`.
+
+### It never touches the network, and that is the design
+
+`similarTo` compares **cached vectors only**. No embedding call, no cache
+write, not even a provider check — if the anchor's vector is missing or
+stale, it returns nothing and the caller falls back. A candidate with a
+stale vector is skipped rather than refreshed, because refreshing is the
+hourly job's business.
+
+This is the same rule browse search obeys with its `deep` gate, for the same
+reason, and it is stricter here: a listing page is an ordinary page load, not
+something the student asked for. Browse search may spend a round trip
+because somebody pressed GO. Nothing may spend one because somebody opened a
+listing.
+
+A consequence worth knowing: **a listing has no meaning-ranked row in its
+first hour**, until the job writes its vector. That is what the fallback is
+for.
+
+### The threshold is 0.80, and it was measured
+
+`npm run similar:run` prints the pairwise score distribution on a real
+board, read-only, calling nothing. The board was empty when this was built
+(see roadmap item 1), so the number came from an 18-listing hand-built board
+embedded with the real provider — `gemini-embedding-001`, 768 dims:
+
+| pair | score |
+|---|---|
+| same kind (two bicycles, two calculators, two thermo textbooks) | 0.822 – 0.923 |
+| same category, different thing | up to 0.858 |
+| different category | up to 0.823 |
+
+**The bands overlap, and no threshold separates them.** That is the finding,
+and it is more useful than the number: every pair that breaks the ordering
+is a **complement**. A phone and its own back cover score **0.858**; two
+different phones score **0.832**. A calculator and a maths textbook score
+0.823. A thing and its companion get described in the same words, so meaning
+cannot tell *instead of this* from *along with this* — which is also why the
+cross-sell was right never to use nearest-by-embedding for its candidates.
+
+So the row subtracts rather than tunes: **whatever `goesWith` already holds
+is removed from the result.** That kills the worst leak by construction, and
+0.80 can then sit low enough to clear every same-kind pair with room to
+spare (the worst was 0.822, and the bicycles — different brands, different
+wording — are the hard case this feature exists for). Raising it to 0.84 to
+shut the complements out took the bicycles with it.
+
+Pinning the same item in both rows would have been the visible bug: a cover
+in "goes with this" *and* in "more like this" reads as broken, whichever one
+is right.
+
+### What the heading promises, the query enforces
+
+The row says "under ₹X", so price **filters**, it does not rank — and the
+fallback applies it too, because the heading is the same either way. A free
+listing keeps the plain "More like this": "under Free" is nonsense.
+
+`listingType` filters for a reason that is the same bug as roadmap item 3:
+₹120/day is not "cheaper than" a ₹2,100 bike, it is a different kind of
+number. A hire is never offered as a substitute for a sale, or the reverse.
+
+Four items, like the strip above it — a row, not a wall. It also means the
+marginal matches at the bottom of the ranking mostly never get a slot: they
+only surface when there are fewer than four good ones. The server decides
+how many, so the page no longer slices the result and cannot disagree with
+it.
+
+The response carries `source`: `semantic` when retrieval filled the row,
+`category` when the fallback did. Same shape as goes-with, and it is how the
+tests tell the two paths apart.
+
+### Tests
+
+`tests/api/similar.test.js`, 12 tests, and **nothing is stubbed** — unusually
+for this suite. Since `similarTo` only ever reads cached vectors, the tests
+write their own: hand-made unit vectors of the form `[cos t, sin t, 0]`
+against `[1, 0, 0]`, so the cosine *is* the number in the constant's name.
+The real retrieval code runs, arithmetic included.
+
+They cover the ranking (the closest match first, not the newest), the three
+rules (nothing dearer, nothing of the other type, nothing the strip already
+shows), both fallback paths, and that an edited listing is not matched on its
+old vector. Verified by breaking it: dropping the price filter and the
+companion filter fails exactly three of them and no others.
+
+Full suite: 339 passing.
+
 ## Next up
 
 **The student-facing product loop is closed end to end, and every screen in
