@@ -26,14 +26,18 @@ export default function SearchBar({
     onSearchRef.current = onSearch;
   });
 
+  // The second argument says how the search was asked for. Typing is a
+  // guess at what the student means and has to stay instant; pressing Enter
+  // or GO is a decision, and only that is allowed to cost a round trip to
+  // the retrieval layer. See getAll in listing.controller.js.
   useEffect(() => {
     if (!touched.current) return;
-    onSearchRef.current?.(debounced);
+    onSearchRef.current?.(debounced, { deep: false });
   }, [debounced]);
 
   const submit = () => {
     touched.current = true;
-    onSearch?.(value.trim());
+    onSearch?.(value.trim(), { deep: true });
   };
 
   return (

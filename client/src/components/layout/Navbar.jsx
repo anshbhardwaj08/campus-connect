@@ -69,7 +69,12 @@ export default function Navbar() {
   const signOut = useSignOut();
   const menuRef = useRef(null);
 
-  const goSearch = (q) => navigate(`/browse?q=${encodeURIComponent(q)}`);
+  // `deep` is forwarded, not dropped: the masthead is the only search box
+  // at desktop width, so without it an Enter or GO from here could never
+  // reach the retrieval pass that `deep=1` unlocks. Typing still navigates
+  // without it. See getAll in listing.controller.js.
+  const goSearch = (q, { deep } = {}) =>
+    navigate(`/browse?q=${encodeURIComponent(q)}${deep && q ? '&deep=1' : ''}`);
 
   useLayoutEffect(() => {
     if (!mobileOpen || !menuRef.current) return;

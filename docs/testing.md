@@ -53,18 +53,30 @@ is why there is no supertest and nothing is mocked.
 
 ## What it covers
 
-157 tests.
+327 tests.
 
 | File | | What it is for |
 |---|---|---|
 | `unit/scamScore` | 8 | the thresholds that send a listing to a moderator |
 | `unit/validators` | 19 | the allow-lists — mostly what they *refuse* |
-| `api/auth` | 18 | register, login, session, password reset |
+| `unit/chatMessage` | 10 | what a message and an offer may be; the only copy of those rules |
+| `unit/emailTransport` | 5 | that mail is handed to a transport, not silently dropped |
+| `unit/vocabulary` | 15 | what a piece of text is about — the synonym list the wanted board runs on |
+| `unit/vector` | 11 | cosine, and spotting a stale cached vector |
+| `unit/embedder` | 21 | which embedding provider is chosen, and the request Gemini is sent |
+| `api/auth` | 19 | register, login, session, password reset |
+| `api/emailVerification` | 17 | that verification is compulsory and cannot be clicked past |
 | `api/ban` | 14 | every surface a suspension has to hide |
 | `api/listings` | 15 | browse, filters, who may change a listing |
+| `api/retrieval` | 8 | retrieval on browse search and saved-search alerts, and when it may run |
+| `api/semanticMatcher` | 15 | the matcher's machinery: caching, batching, staleness, fallback |
+| `api/wantedMatch` | 18 | which listings answer a wanted post, and what the student is told |
+| `api/crossSell` | 22 | "goes with this" — what the app does with whatever a model returns |
 | `api/deals` | 22 | the handshake, its guards, and reviews |
 | `api/rental` | 24 | the hire clock end to end, including the daily job |
 | `api/chat` | 11 | threads and participant membership |
+| `api/communityClaim` | 14 | settling a ride or a found item from inside its chat thread |
+| `api/eventRsvp` | 13 | that an RSVP count means people, not button presses |
 | `api/reports` | 12 | the moderation queue |
 | `api/adminStats` | 14 | the dashboard aggregations |
 

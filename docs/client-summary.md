@@ -10,7 +10,11 @@ verified against the live API.
   signs you out everywhere else)
 - **Home** — hero panel, category rail with real counts, listing feed
 - **Browse** — search, a buying/renting switch, category/condition/price
-  filters, 3 sort orders, pagination. All filter state in the URL
+  filters, 3 sort orders, pagination. All filter state in the URL. Search is
+  two tiers: a keyword regex as you type, and — only when you press Enter or
+  GO *and* the keywords came up short — a retrieval pass, so "bike" finds a
+  cycle. The masthead box is the only one at desktop width and submits the
+  same way
 - **Listings** — detail page, post, edit. Photos via Cloudinary
 - **Renting** — a listing is either **for sale or for rent**, never both. A
   rental carries a rate (`price`) per `rentPeriod` (day/week/month) and an

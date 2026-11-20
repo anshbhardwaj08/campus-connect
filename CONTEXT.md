@@ -1810,9 +1810,115 @@ Still open, and worth knowing before the AI work starts:
   body, so the 40-point price branch never runs. Maximum reachable score is
   55; `listing.controller.js` quarantines at `>= 70`. No listing has ever
   been flagged, and the admin pending queue is unreachable by that path.
-- `savedSearch.service.js` matches with `$text` (whole words only), the very
+- `savedSearch.service.js` matched with `$text` (whole words only), the very
   thing `listing.controller.js:58` has a comment explaining it avoided for
-  the browse search. Saved-search alerts silently miss matches today.
+  the browse search. **Fixed 2026-11-20** — see "Search knows what things
+  are" below.
+
+## Search knows what things are (2026-11-20)
+
+Typing "bike" into Browse found nothing, and somebody who saved "cycle" was
+never told about a Hercules. Both were word matching — a regex on browse,
+`$text` on saved searches — and the campus vocabulary is the one thing word
+matching cannot do. Both now go through retrieval, the same embeddings the
+wanted board runs on. This closes the two roadmap items that said so.
+
+**`matchers/retrieve.js` is new, and it is deliberately not
+`semantic.matcher.js`.** That file answers one question — "which listings
+answer this wanted post?" — and its candidate rules are built around it: the
+asker's own listings are excluded, a stated budget filters. Browse and saved
+searches ask the same *kind* of question over a different set. So the shared
+half moved out: text in, vectors compared, listings above a threshold, best
+first. **Who is eligible is the caller's business**, passed in as a plain
+Mongo filter. One threshold (`SEMANTIC_THRESHOLD`, 0.66), one embed budget,
+one place to tune.
+
+This is retrieval, **not** RAG. Nothing here generates anything. The one
+piece of real RAG in the product is still `crossSell.service.js`.
+
+### Browse search is two tiers, and the second one has a gate
+
+The regex still runs first and still answers most searches. Retrieval runs
+only when **both** are true:
+
+- `deep=1` — the student actually submitted, rather than typed a letter
+- the keyword pass came up short (under `DEEP_SEARCH_FLOOR`, 5 — less than
+  one row of cards, which is where the page starts reading as "nothing here")
+
+That is the "bike" case and almost nothing else. **The gate is the whole
+design.** This box searches as you type; embedding a query is a network
+round trip, so doing it per keystroke would be slow, expensive and
+rate-limited — and it would buy nothing, because a half-typed word has no
+meaning to retrieve. A page the regex answered well never reaches a model,
+and neither does typing.
+
+`deep` rides in the **URL**, like every other filter on this page, so a
+result stays shareable and survives a reload. It is dropped the moment the
+student changes anything else: a filter tweak is not a fresh decision to
+search.
+
+Three things that are easy to get wrong here, all of them now pinned by a
+test:
+
+- **The stated filters still apply.** The `$or` text clause is stripped out
+  and the rest of the filter — category, price ceiling, condition — is passed
+  to retrieval as the candidate set. A price ceiling is a constraint, not a
+  hint; applying it after ranking would return listings the student said
+  they could not afford.
+- **Retrieval's ordering is kept.** The second tier re-queries to populate
+  the seller (retrieval works on lean documents), and a `$in` query comes
+  back in `_id` order, which means nothing to a reader. The hits are
+  re-sorted back into the order retrieval ranked them.
+- **Duplicates are dropped.** Retrieval legitimately finds listings the
+  regex already found — one hit is under the floor, so the second tier still
+  runs and would otherwise show it twice.
+
+**The masthead forwards `deep`, which is not a detail.** `SearchBar` is
+rendered `lg:hidden` on Browse, so at desktop width the Navbar's box is the
+*only* search box. Its `goSearch` dropped the second argument, so Enter and
+GO on desktop could never have reached the second tier — the feature would
+have worked on a phone and silently not on a laptop.
+
+### Saved-search alerts
+
+Same retrieval, and here it is the only text path — there is no keyword
+fallback, which is a real change and worth stating plainly. If no embedding
+provider is configured, a saved search **with text** now says nothing where
+`$text` used to say something occasionally and wrongly. That is the right
+outcome for an alert: an unprompted notification has a higher bar than a
+page the student is already looking at, and "we found nothing" is a better
+failure than "we found the wrong thing at 7am". `GEMINI_API_KEY` is set
+locally and must be set on Render for alerts to fire at all.
+
+Structured filters still run in the database. Only the free text is
+semantic. A saved search with filters and no text skips retrieval entirely —
+there is nothing to retrieve, and every new listing passing the filters is a
+match.
+
+### The cross-sell saw 40 listings and now sees 120
+
+Unrelated to the above, found while reading it. `crossSell.service.js` showed
+the model the **40 newest** listings and asked it to find a companion. On a
+board where the matching case is three months old, that quietly guarantees
+it cannot — and the failure looks like "the AI found nothing" rather than
+"the AI was never shown it". Each candidate costs about ten tokens of
+prompt (an id, a title, a price), so 120 is still a small ask of flash-lite
+and covers the whole board at campus scale.
+
+### Tests
+
+`tests/api/retrieval.test.js`, 8 tests. **Retrieval is stubbed, not run** —
+a real embedding call needs a provider, a network and a bill, and none of
+that is what these assert. What they pin is whether the callers ask for it
+at the right moments and do the right thing with the answer: that a keyword
+hit skips it, that a keystroke never reaches it, that a provider outage
+degrades to the keyword results rather than an error page, that the filters
+reach it, and that a saved "cycle" produces one notification about a bike.
+The stub replaces `retrieve.semanticSearch` on the module, which works
+because both callers resolve it late.
+
+Full suite: 327 passing. `docs/testing.md` had a coverage table claiming
+157 and missing seven files; it is current now.
 
 ## Next up
 

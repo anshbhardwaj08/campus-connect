@@ -5,6 +5,11 @@ const ApiResponse = require('../utils/ApiResponse');
 const { goesWithFor } = require('../services/crossSell.service');
 const { paginate, buildPagination } = require('../utils/paginate');
 const calculateScamScore = require('../utils/scamScore');
+
+// Below this many keyword results, an explicit search is worth a retrieval
+// pass. Five fills less than one row of cards, which is the point at which
+// the page reads as "nothing here" to a student.
+const DEEP_SEARCH_FLOOR = 5;
 const { excludeBlocked } = require('../utils/blockedUsers');
 const { emitAdminActivity } = require('../services/adminFeed.service');
 
@@ -74,6 +79,62 @@ const getAll = catchAsync(async (req, res) => {
       .populate('sellerId', 'name avatar trustScore isEmailVerified'),
     Listing.countDocuments(filter),
   ]);
+
+  // Second tier: what the keywords missed.
+  //
+  // The regex above cannot match "bike" to a cycle, which is the single
+  // most visible gap between what this page looks like it does and what it
+  // does. Retrieval can — but embedding a query is a network round trip,
+  // and this box searches as you type, so doing it on every keystroke
+  // would be slow, expensive and rate-limited.
+  //
+  // So it runs only when BOTH are true:
+  //   deep=1        the student actually submitted, rather than typed a
+  //                 letter (the client sends it on Enter and on GO only)
+  //   thin results  the keywords already came up short
+  //
+  // That is exactly the "bike" case and almost nothing else. A page that
+  // regex answered well never reaches a model, and neither does typing.
+  // If the provider is missing or fails, semanticSearch returns nothing
+  // and the student simply gets the keyword results.
+  const wantsDeep = req.query.deep === '1' || req.query.deep === 'true';
+  if (wantsDeep && q && q.trim() && listings.length < DEEP_SEARCH_FLOOR && page === 1) {
+    const { semanticSearch } = require('../matchers/retrieve');
+
+    // Same eligibility as the keyword pass, minus the text clause — the
+    // filters are stated constraints and still apply.
+    const { $or, ...structural } = filter;
+    const already = new Set(listings.map((l) => String(l._id)));
+
+    const hits = await semanticSearch(q, {
+      filter: structural,
+      limit: limit - listings.length,
+    });
+
+    const extra = hits.map((h) => h.listing).filter((l) => !already.has(String(l._id)));
+
+    if (extra.length) {
+      // Populated separately because retrieval works on lean documents.
+      const populated = await Listing.find({ _id: { $in: extra.map((l) => l._id) } }).populate(
+        'sellerId',
+        'name avatar trustScore isEmailVerified'
+      );
+
+      // Keep retrieval's ordering: it ranked these by how well they answer
+      // the query, and _id order means nothing to a reader.
+      const byId = new Map(populated.map((l) => [String(l._id), l]));
+      const ordered = extra.map((l) => byId.get(String(l._id))).filter(Boolean);
+
+      return res.status(200).json(
+        new ApiResponse(
+          200,
+          { listings: [...listings, ...ordered] },
+          'Listings fetched',
+          buildPagination(page, limit, total + ordered.length)
+        )
+      );
+    }
+  }
 
   return res
     .status(200)

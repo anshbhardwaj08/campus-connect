@@ -31,7 +31,16 @@ const { winstonLogger } = require('../middleware/logger');
 
 // How much of the board the model is shown. Big enough to contain the
 // answer on a campus-sized board, small enough to stay a cheap prompt.
-const CANDIDATES = 40;
+//
+// Raised from 40 to 120. Each candidate costs about ten tokens in the
+// prompt (an id, a title, a price), so 120 is still a small ask of
+// flash-lite, and it means the whole board is visible to the model on
+// anything up to a few hundred live listings. Below that number the model
+// was being asked to find a companion among the 40 newest items, which on
+// a board where the matching case is three months old quietly guarantees
+// it cannot — and the failure looks like "the AI found nothing" rather
+// than "the AI was never shown it".
+const CANDIDATES = 120;
 
 // Four suggestions is a strip, not a wall. More reads as filler.
 const MAX_SUGGESTIONS = 4;

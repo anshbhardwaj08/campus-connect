@@ -32,6 +32,7 @@ export default function Browse() {
       minPrice: params.get('minPrice') || '',
       maxPrice: params.get('maxPrice') || '',
       sort: params.get('sort') || 'recent',
+      deep: params.get('deep') || '',
     }),
     [params]
   );
@@ -41,11 +42,17 @@ export default function Browse() {
 
   // Any filter change resets to page 1 — staying on page 5 of a result set
   // that just shrank to two pages shows an empty grid for no visible reason.
-  const setFilter = (key, value) => {
+  const setFilter = (key, value, { deep = false } = {}) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
     next.delete('page');
+    // `deep` rides in the URL so the result stays shareable and survives a
+    // reload. It is set only when the student pressed Enter or GO, and
+    // dropped as soon as they change anything else — a filter tweak is not
+    // a fresh decision to search.
+    if (key === 'q' && deep && value) next.set('deep', '1');
+    else next.delete('deep');
     setParams(next);
   };
 
@@ -99,7 +106,10 @@ export default function Browse() {
       </header>
 
       <div className="mb-[9px] lg:hidden">
-        <SearchBar initialValue={filters.q} onSearch={(q) => setFilter('q', q)} />
+        <SearchBar
+          initialValue={filters.q}
+          onSearch={(q, { deep } = {}) => setFilter('q', q, { deep })}
+        />
       </div>
 
       <div className="lg:flex lg:items-start lg:gap-[9px]">
