@@ -16,6 +16,29 @@ const DEEP_SEARCH_FLOOR = 5;
 // also means the marginal matches at the bottom of the ranking mostly never
 // get a slot: they only appear when there are fewer than four good ones.
 const MAX_SIMILAR = 4;
+
+// A substitute costs roughly what the thing it replaces costs. An accessory
+// costs a fraction of it. So the row has a floor as well as a ceiling, and
+// it is the cheapest reliable way to tell the two apart — measured on the
+// demo board, where the gap is not close:
+//
+//   screen guard / phone      1.3%     cover / phone        1.9%
+//   lock / cycle              6%       power bank / phone    11%
+//   helmet / cycle            14%   <- companions end here
+//   calculator / calculator   44%   <- alternatives start here
+//   Redmi / iPhone            50%      Firefox / Hercules    67%
+//
+// It catches what the `goesWith` subtraction cannot: that only removes
+// companions the cross-sell actually picked, and the model picks at most
+// four, so a companion it passed over was still landing in this row. A
+// ₹250 lock under a ₹4,200 cycle scored 0.849 — higher than any genuine
+// pair of cycles — and read as "more like this".
+//
+// The cost, stated plainly: a genuine bargain is hidden. Somebody selling a
+// working cycle for ₹500 will not appear under a ₹4,200 one. That is the
+// wrong call for a bargain hunter and the right one for a row that claims
+// these are the same kind of thing.
+const SIMILAR_PRICE_FLOOR = 0.25;
 const { excludeBlocked } = require('../utils/blockedUsers');
 const { emitAdminActivity } = require('../services/adminFeed.service');
 
@@ -88,9 +111,21 @@ const getAll = catchAsync(async (req, res) => {
 
   // Second tier: what the keywords missed.
   //
-  // The regex above cannot match "bike" to a cycle, which is the single
-  // most visible gap between what this page looks like it does and what it
-  // does. Retrieval can — but embedding a query is a network round trip,
+  // The regex above cannot match a description of a thing to the thing:
+  // "something to keep food cold" finds no fridge, "somewhere to study in
+  // my room" finds no desk. That is the most visible gap between what this
+  // page looks like it does and what it does. Retrieval closes it —
+  // measured on the demo board, those two land at 0.70 and above.
+  //
+  // What it does NOT close is a one-word synonym. "bike" scores 0.652
+  // against a cycle and the bar is 0.66, so it still finds nothing; "a bike
+  // to ride around campus" scores 0.706 and ranks both cycles first. Short
+  // queries sit right at the line because a single word carries less to
+  // match on than a sentence does, and the threshold is shared with the
+  // wanted board, whose posts are all sentences. Worth knowing before
+  // lowering it for one word's sake.
+  //
+  // Embedding a query is a network round trip,
   // and this box searches as you type, so doing it on every keystroke
   // would be slow, expensive and rate-limited.
   //
@@ -255,14 +290,17 @@ const getSimilar = catchAsync(async (req, res) => {
 
   // The two things the row's own heading promises, so both filter rather
   // than rank:
-  //   price      "under ₹X" has to be true of everything in the row
+  //   price      "under ₹X" has to be true of everything in the row, and a
+  //              floor under that, because an accessory is not an alternative
   //   type       a hire rate against a sale price is meaningless — ₹120/day
   //              is not "cheaper than" a ₹2,100 bike, it is a different
   //              kind of number
   const eligible = {
     ...(await excludeBlocked('sellerId')),
     listingType: listing.listingType,
-    ...(typeof listing.price === 'number' ? { price: { $lte: listing.price } } : {}),
+    ...(typeof listing.price === 'number'
+      ? { price: { $lte: listing.price, $gte: Math.floor(listing.price * SIMILAR_PRICE_FLOOR) } }
+      : {}),
   };
 
   // Whatever the strip above is already showing, removed.

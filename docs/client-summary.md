@@ -12,9 +12,10 @@ verified against the live API.
 - **Browse** — search, a buying/renting switch, category/condition/price
   filters, 3 sort orders, pagination. All filter state in the URL. Search is
   two tiers: a keyword regex as you type, and — only when you press Enter or
-  GO *and* the keywords came up short — a retrieval pass, so "bike" finds a
-  cycle. The masthead box is the only one at desktop width and submits the
-  same way
+  GO *and* the keywords came up short — a retrieval pass, so "something to
+  keep food cold" finds a mini fridge. A one-word synonym ("bike") still
+  misses; a phrase ("a bike to ride around campus") does not. The masthead
+  box is the only one at desktop width and submits the same way
 - **Listings** — detail page, post, edit. Photos via Cloudinary. The detail
   page carries two rows that answer opposite questions: "Goes with this"
   (complements, written by the hourly job) and "More like this, under ₹X"

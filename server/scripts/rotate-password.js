@@ -31,7 +31,7 @@ if (!emails.length) {
 const generate = () => crypto.randomBytes(18).toString('base64url');
 
 const main = async () => {
-  await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 15000 });
+  await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: Number(process.env.MONGO_TIMEOUT_MS) || 15000 });
   const User = require('../src/models/User');
 
   const done = [];

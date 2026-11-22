@@ -12,6 +12,7 @@ and access community features like Lost & Found, carpools, and events.
 - docs/admin-summary.md   -> admin app, in brief
 - docs/design-system.md   -> Comic Noir UI spec
 - docs/testing.md         -> server test suite: how to run it, how to add to it
+- docs/demo-script.md     -> demoing the AI features: what to type, what to say
 
 ## UI rule (applies to every screen, client and admin)
 The entire product uses ONE theme: **Comic Noir**. Every new page, component

@@ -25,7 +25,7 @@ const showPairs = process.argv.includes('--pairs');
 const FLOOR = 0.5;
 
 const main = async () => {
-  await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 15000 });
+  await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: Number(process.env.MONGO_TIMEOUT_MS) || 15000 });
 
   const Listing = require('../src/models/Listing');
   const embedder = require('../src/matchers/embedder');

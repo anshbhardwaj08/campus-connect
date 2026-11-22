@@ -110,9 +110,18 @@ const LISTINGS = [
     description: 'Charges a phone about four times. Type-C in and out.',
     price: 900, category: 'electronics', condition: 'used',
   },
+  // The decoy: the same KIND of thing as the Redmi, so the cross-sell is
+  // tempted to suggest a substitute where a companion belongs.
+  //
+  // Its description has to read like a real listing, and used not to. It
+  // said "Decoy: another phone. A cross-sell must NOT suggest this.", which
+  // broke it twice over: the line is shown on the board to anyone looking
+  // at the demo, and it poisoned the very embedding it exists to test —
+  // scored against the Redmi it came out BELOW a bicycle, because the words
+  // in it are about cross-selling rather than about a phone.
   {
     title: 'iPhone 11, 64GB',
-    description: 'Decoy: another phone. A cross-sell must NOT suggest this.',
+    description: 'Battery replaced last year, small dent on one corner. Screen is flawless, charger included.',
     price: 16000, category: 'electronics', condition: 'used',
   },
   {
@@ -124,6 +133,28 @@ const LISTINGS = [
     title: 'Cycling helmet, medium',
     description: 'Never had a fall in it.',
     price: 600, category: 'cycles', condition: 'like-new',
+  },
+
+  // --- substitutes, for "More like this, under Rs X" --------------------
+  //
+  // That row shows other listings of the same KIND that cost no more, so
+  // the board has to contain a cheaper alternative to something already on
+  // it. Without a pair like this the feature has nothing it can honestly
+  // show, and an empty row looks like a broken feature rather than an
+  // honest one.
+  //
+  // Both are deliberately priced in the same ballpark as the thing they
+  // are an alternative TO. That is what separates them from the companions
+  // above, which cost a small fraction of their anchor.
+  {
+    title: 'Firefox single-speed cycle',
+    description: 'Rode it for two semesters to get to class. Tyres fine, comes with a pump.',
+    price: 2800, category: 'cycles', condition: 'used',
+  },
+  {
+    title: 'Casio fx-82MS calculator',
+    description: 'Bought in first year and hardly touched since. Works fine, has its slip case.',
+    price: 400, category: 'stationery', condition: 'like-new',
   },
 ];
 
@@ -138,7 +169,7 @@ const WANTED = [
 ];
 
 const main = async () => {
-  await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 15000 });
+  await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: Number(process.env.MONGO_TIMEOUT_MS) || 15000 });
 
   const User = require('../src/models/User');
   const Listing = require('../src/models/Listing');

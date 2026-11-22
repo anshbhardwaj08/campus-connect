@@ -19,7 +19,7 @@ dns.setServers(['8.8.8.8', '1.1.1.1']);
 const all = process.argv.includes('--all');
 
 const main = async () => {
-  await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 15000 });
+  await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: Number(process.env.MONGO_TIMEOUT_MS) || 15000 });
 
   const Listing = require('../src/models/Listing');
   const generator = require('../src/generators');

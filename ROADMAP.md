@@ -24,6 +24,25 @@ Sizes are rough: **S** under an hour, **M** half a day, **L** a day or more.
 
 ## Now
 
+### -1. `GEMINI_API_KEY` is not set on Render · **S** · *the AI features are off in production*
+
+Found 2026-11-21 by checking production directly. Keyword search works;
+every retrieval path returns nothing. `?q=something to keep food cold&deep=1`
+gave 0 results while `?q=fridge` gave the fridge, and `/listings/:id/similar`
+answered `source: "category"` rather than `"semantic"`.
+
+With no embedder the model name reads `none`, so every cached vector looks
+stale and retrieval returns nothing. That is the designed degradation and it
+is why nothing in a log says "broken" — which is exactly why this went
+unnoticed.
+
+What still works on the deployed site is whatever the hourly job *stored*:
+the bell notifications and the "goes with this" strip. What is computed per
+request — browse's second tier and "more like this" — does not. Set
+`GEMINI_API_KEY` (and check `REDIS_URL`, or no job runs at all) under
+Render → `campus-connect` → Environment. See `docs/demo-script.md`.
+
+
 ### 0. Set the two mail vars on Render · **S** · *blocks sign-up on the deployed site*
 
 Render's free tier blocks outbound SMTP (25, 465, 587), so on the deployed
@@ -50,8 +69,10 @@ in development.
       answer in about a second — if it sits there for two minutes, the key
       did not take.
 
-Only 292 Brevo credits remain, which is the free tier's monthly allowance
-and plenty for a campus, but it is a budget rather than a tap.
+Brevo's free tier is **300 emails per day**, not per month — the counter
+read 292 on 2026-11-20 and 300 again the next morning. Plenty for a campus,
+but it resets daily rather than accumulating, so a bulk send cannot borrow
+against tomorrow.
 
 
 ### 1. The live board is empty · **S** · *was "remove the demo data"*
@@ -131,11 +152,14 @@ token auth path alongside the cookie one.
 - [ ] Three accounts still use well-known passwords — `npm run preflight`
       FAILs on them: `gopalgarg`, `pulkitgoyal`, `prithvigarg`. Fix with
       `npm run rotate-password -- <email>`.
-- [ ] Leftover test accounts: `Test Student`, `Reset Test`.
+- [ ] Leftover test accounts: `Test Student`, `Reset Test`, and
+      `signup.probe.delete.me@pec.edu.in` (created 2026-11-20, marked
+      verified, mailbox does not exist — it is the one hard bounce in the
+      Brevo log). It says `delete.me` in the address; believe it.
 - [ ] `/verify-phone` has no route into it — wire it in or delete it.
 - [ ] Unused import warning in `client/src/services/api.js`.
-- [ ] Remove the demo seed data before any real launch:
-      `npm run seed:demo -- --for <email> --remove --commit`
+- [ ] Re-seed the board for demos, then remove it before any real launch —
+      see item 1. `npm run seed:demo -- --for <email> --remove --commit`
 
 ---
 

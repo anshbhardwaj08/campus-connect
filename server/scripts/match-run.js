@@ -18,7 +18,7 @@ const mongoose = require('mongoose');
 dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 const main = async () => {
-  await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 15000 });
+  await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: Number(process.env.MONGO_TIMEOUT_MS) || 15000 });
 
   const { runWantedMatches } = require('../src/services/wantedMatch.service');
   const { describe } = require('../src/matchers/embedder');

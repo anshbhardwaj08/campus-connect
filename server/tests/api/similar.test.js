@@ -160,6 +160,25 @@ describe('more like this', () => {
       assert.deepEqual(titles, ['Firefox bike, good condition']);
     });
 
+    test('an accessory is not an alternative, however close it scores', async () => {
+      const anchor = await addListing('Hercules Roadeo gear cycle', { price: 4200 });
+      // A lock scores HIGHER against a cycle than another cycle does (0.849
+      // against 0.822, measured) — it is described in the same words. Only
+      // the price floor keeps it out, and the cross-sell subtraction cannot:
+      // the model picks at most four companions, and this is one it passed
+      // over.
+      const lock = await addListing('Cycle lock with keys', { price: 250 });
+      const cheaperCycle = await addListing('Firefox single-speed cycle', { price: 2800 });
+
+      await withVector(anchor, V_ANCHOR);
+      await withVector(lock, V_095);
+      await withVector(cheaperCycle, V_085);
+
+      const { titles } = await getRow(anchor._id);
+
+      assert.deepEqual(titles, ['Firefox single-speed cycle']);
+    });
+
     test('a hire is never offered as a substitute for a sale', async () => {
       const anchor = await addListing('Hercules Roadeo gear cycle', { price: 2100 });
       // ₹120/day is not "cheaper than" a ₹2,100 bike — it is a different

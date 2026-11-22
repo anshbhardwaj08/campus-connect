@@ -1817,11 +1817,16 @@ Still open, and worth knowing before the AI work starts:
 
 ## Search knows what things are (2026-11-20)
 
-Typing "bike" into Browse found nothing, and somebody who saved "cycle" was
-never told about a Hercules. Both were word matching — a regex on browse,
-`$text` on saved searches — and the campus vocabulary is the one thing word
-matching cannot do. Both now go through retrieval, the same embeddings the
-wanted board runs on. This closes the two roadmap items that said so.
+Typing a description of a thing into Browse found nothing — "something to
+keep food cold" returned no fridge — and somebody who saved "cycle" was never
+told about a Hercules. Both were word matching (a regex on browse, `$text` on
+saved searches), and the campus vocabulary is the one thing word matching
+cannot do. Both now go through retrieval, the same embeddings the wanted
+board runs on. This closes the two roadmap items that said so.
+
+**One claim in here was wrong and is corrected below:** this does not make a
+one-word synonym work. Measured on the demo board, "bike" scores 0.652
+against a cycle and the bar is 0.66. See "What it does and does not reach".
 
 **`matchers/retrieve.js` is new, and it is deliberately not
 `semantic.matcher.js`.** That file answers one question — "which listings
@@ -1845,12 +1850,41 @@ only when **both** are true:
 - the keyword pass came up short (under `DEEP_SEARCH_FLOOR`, 5 — less than
   one row of cards, which is where the page starts reading as "nothing here")
 
-That is the "bike" case and almost nothing else. **The gate is the whole
-design.** This box searches as you type; embedding a query is a network
+That is the natural-language case and almost nothing else. **The gate is the
+whole design.** This box searches as you type; embedding a query is a network
 round trip, so doing it per keystroke would be slow, expensive and
 rate-limited — and it would buy nothing, because a half-typed word has no
 meaning to retrieve. A page the regex answered well never reaches a model,
 and neither does typing.
+
+### What it does and does not reach (measured 2026-11-21)
+
+On the seeded demo board, with `gemini-embedding-001` and the 0.66 bar,
+queries embedded as `query` against listing documents:
+
+| query | best match | score |
+|---|---|---|
+| "a bike to ride around campus" | Firefox cycle | 0.706 |
+| "something to keep food cold" | Mini fridge | 0.675 |
+| "somewhere to study in my room" | Study table | 0.70 |
+| "something to stay warm this winter" | Bajaj room heater | 0.661 |
+| "phone charger for long days out" | 20000mAh power bank | ~0.69 |
+| **"bike"** | **Firefox cycle** | **0.652 — misses** |
+| "warm" | Bajaj room heater | 0.634 — misses |
+| "cycle" | Cycle lock | 0.687 — hits, but the lock outranks the cycles |
+
+So **phrases work and single words sit right on the line.** A word carries
+less to match on than a sentence, and the threshold is shared with the
+wanted board, whose posts are all sentences — which is why 0.66 suits them
+and strands "bike" by eight thousandths.
+
+Deliberately not fixed by lowering it. At a bar low enough to admit "bike"
+(0.65), the top hit for it is the **cycling helmet** at 0.655, not a cycle:
+the accessory/alternative confusion that the substitutes row has to subtract
+its way out of shows up here too, and there is no anchor to subtract
+against in a search box. A better-ranked miss beats a badly-ranked hit. If
+it is ever worth having, it wants its own threshold and its own
+measurement, not a nudge to the shared one.
 
 `deep` rides in the **URL**, like every other filter on this page, so a
 result stays shareable and survives a reload. It is dropped the moment the
