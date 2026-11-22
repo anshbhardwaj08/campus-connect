@@ -16,6 +16,10 @@ verified against the live API.
   keep food cold" finds a mini fridge. A one-word synonym ("bike") still
   misses; a phrase ("a bike to ride around campus") does not. The masthead
   box is the only one at desktop width and submits the same way
+- **Photos** — any photograph on a card or a listing page opens full size
+  (`ui/Lightbox`, arrow keys, a counter), and every upload form can crop to
+  4:3 before sending (`listing/CropModal`). Cards zoom under the cursor. The
+  wanted board is the exception — `LookingFor` carries no image at all
 - **Listings** — detail page, post, edit. Photos via Cloudinary. The detail
   page carries two rows that answer opposite questions: "Goes with this"
   (complements, written by the hourly job) and "More like this, under ₹X"

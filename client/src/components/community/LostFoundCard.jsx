@@ -1,9 +1,12 @@
 // Something lost, or something found. The distinction is the whole point of
 // the card, so it is carried by a word, not just a colour — a found item
 // says FOUND on it.
+import { useState } from 'react';
 import { MapPin, Search, PackageSearch } from 'lucide-react';
 
 import Panel from '../ui/Panel';
+import PhotoExpand from '../ui/PhotoExpand';
+import Lightbox from '../ui/Lightbox';
 import Badge from '../ui/Badge';
 import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
@@ -14,18 +17,25 @@ export default function LostFoundCard({ item, index = 0, currentUserId, onResolv
   const { _id, type, title, description, location, images, date, userId: poster, status } = item;
 
   const photo = images?.[0];
+  const [zoomed, setZoomed] = useState(false);
   const isLost = type === 'lost';
   const isMine = String(poster?._id || poster) === String(currentUserId);
   const Icon = isLost ? Search : PackageSearch;
 
   return (
-    <Panel index={index} flush className="h-full">
+    <Panel index={index} flush className="group h-full">
       <div className="flex h-full flex-col">
-        <div className={`art relative h-[132px] shrink-0 ${photo ? 'photo' : ''}`}>
+        <div className={`art art--zoom relative h-[132px] shrink-0 ${photo ? 'photo' : ''}`}>
           {photo ? (
             <img src={photo} alt={title} loading="lazy" />
           ) : (
             <Icon className="h-9 w-9 text-ink/25" strokeWidth={1.75} />
+          )}
+
+          {/* A lost-and-found photo is the whole evidence — "is that my
+              wallet?" cannot be answered from a 132px thumbnail. */}
+          {photo && (
+            <PhotoExpand onClick={() => setZoomed(true)} label={`View photo of ${title}`} />
           )}
 
           {/* Lost is the urgent one — someone is missing something. */}
@@ -93,6 +103,9 @@ export default function LostFoundCard({ item, index = 0, currentUserId, onResolv
           </div>
         </div>
       </div>
+      {photo && (
+        <Lightbox images={images} isOpen={zoomed} onClose={() => setZoomed(false)} alt={title} />
+      )}
     </Panel>
   );
 }

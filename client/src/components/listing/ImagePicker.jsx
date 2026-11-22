@@ -6,9 +6,10 @@
 // images only). Catching it here means a student finds out before a failed
 // upload, not after.
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ImagePlus, X } from 'lucide-react';
+import { ImagePlus, X, Crop } from 'lucide-react';
 
 import { FieldShell } from '../ui/Field';
+import CropModal from './CropModal';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -26,6 +27,10 @@ export default function ImagePicker({
   // pickers share a page, and silently break the label association.
   const inputId = useId();
   const [localError, setLocalError] = useState('');
+  // Which photo is being cropped, by index. Null means the crop modal is
+  // shut. Index rather than the file itself, so replacing it is a plain
+  // positional swap and the lead photo keeps its place.
+  const [cropping, setCropping] = useState(null);
 
   // Derived during render rather than pushed into state from an effect —
   // the effect exists only to revoke, since object URLs leak for the life
@@ -61,6 +66,13 @@ export default function ImagePicker({
   const removeAt = (i) => {
     setLocalError('');
     onChange(files.filter((_, idx) => idx !== i));
+  };
+
+  // The cropped file replaces the original in place. The original is only
+  // dropped at this point — cancelling the crop leaves the photo untouched.
+  const replaceAt = (i, next) => {
+    onChange(files.map((f, idx) => (idx === i ? next : f)));
+    setCropping(null);
   };
 
   const full = files.length >= MAX_FILES;
@@ -99,6 +111,18 @@ export default function ImagePicker({
               >
                 <X className="h-3 w-3" strokeWidth={3} />
               </button>
+
+              {/* Opposite corner from Remove, and a different glyph: these
+                  two sit 86px apart on a phone and must not be mistaken for
+                  each other. */}
+              <button
+                type="button"
+                onClick={() => setCropping(i)}
+                aria-label={`Crop photo ${i + 1}`}
+                className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center border-2 border-b-0 border-r-0 border-ink bg-paper-3 text-ink transition-colors hover:bg-crimson hover:text-paper-3"
+              >
+                <Crop className="h-3 w-3" strokeWidth={3} />
+              </button>
             </div>
           </div>
         ))}
@@ -114,6 +138,13 @@ export default function ImagePicker({
           </button>
         )}
       </div>
+
+      <CropModal
+        file={cropping === null ? null : files[cropping]}
+        isOpen={cropping !== null}
+        onCancel={() => setCropping(null)}
+        onDone={(next) => replaceAt(cropping, next)}
+      />
 
       <input
         ref={inputRef}

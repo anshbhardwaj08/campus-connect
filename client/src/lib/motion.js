@@ -7,6 +7,8 @@
 //   stampIn    — caption boxes land like a rubber stamp
 //   lineIn     — Bangers headline lines snap in off the left
 //   drawIn     — plotted lines ink themselves in, left to right
+//   cueIn/Out  — the scroll nudge rises from the bottom edge
+//   lightboxIn/Out, photoSwap — a photo opened full size
 //
 // Everything is wrapped so that `prefers-reduced-motion: reduce` lands on the
 // final state instantly instead of playing. Never call gsap.from() directly in
@@ -169,6 +171,68 @@ export function cueOut(targets, vars = {}) {
   }
 
   return gsap.to(targets, { y: 14, opacity: 0, duration: 0.22, ease: 'power2.in', ...vars });
+}
+
+// --- The lightbox ---------------------------------------------------------
+//
+// A photo opened full size is a panel landing on top of the page, so it moves
+// like one: the scrim fades, the sheet wipes left to right. Same two beats as
+// `ui/Modal`, lifted into here because the rule at the top of this file is
+// the rule — a component that reaches for gsap itself is a component where
+// the reduced-motion guard can leak.
+//
+// Paired in/out like cueIn/cueOut. `lightboxOut` has to report when it has
+// finished so the portal can unmount after the exit rather than during it;
+// under reduced motion there is no exit to wait for, so it calls back at once.
+export function lightboxIn(scrim, sheet) {
+  if (!scrim || !sheet) return null;
+
+  if (prefersReducedMotion()) {
+    gsap.set(scrim, { opacity: 1 });
+    gsap.set(sheet, { clipPath: SHOWN });
+    return null;
+  }
+
+  const tl = gsap.timeline();
+  tl.fromTo(scrim, { opacity: 0 }, { opacity: 1, duration: 0.18 });
+  tl.fromTo(
+    sheet,
+    { clipPath: HIDDEN },
+    { clipPath: SHOWN, duration: WIPE_DURATION, ease: EASE },
+    '-=0.08'
+  );
+  return tl;
+}
+
+export function lightboxOut(scrim, sheet, { onComplete } = {}) {
+  if (!scrim || !sheet || prefersReducedMotion()) {
+    onComplete?.();
+    return null;
+  }
+
+  const tl = gsap.timeline({ onComplete });
+  tl.to(sheet, { clipPath: HIDDEN, duration: 0.26, ease: 'power3.in' });
+  tl.to(scrim, { opacity: 0, duration: 0.16 }, '-=0.12');
+  return tl;
+}
+
+// Stepping to the next photo. The same wipe, quicker: it is a page turn
+// inside something already open, not an arrival. Deliberately not a
+// cross-fade — a fade between two photographs reads as a slideshow, and
+// nothing else in this system fades between two states.
+export function photoSwap(target) {
+  if (!target) return null;
+
+  if (prefersReducedMotion()) {
+    gsap.set(target, { clipPath: SHOWN });
+    return null;
+  }
+
+  return gsap.fromTo(
+    target,
+    { clipPath: HIDDEN },
+    { clipPath: SHOWN, duration: 0.26, ease: EASE }
+  );
 }
 
 export { gsap };

@@ -149,6 +149,41 @@ it is a logo, not a heading.
 A panel that lands on top of the page. Flat ink scrim with a halftone screen,
 **no backdrop blur**. Wipes in like any other panel.
 
+### `Lightbox`
+A photograph opened full size. Same construction as `Modal` — portal, flat
+ink scrim with a halftone screen, no blur, a Panel that wipes in — but sized
+to the viewport, with the photo shown **whole** rather than cropped to a
+well, arrow-key stepping and a `2 / 5` counter.
+
+```jsx
+<Lightbox images={images} index={activeImage} isOpen={zoomed}
+          onClose={() => setZoomed(false)} alt={title} />
+```
+
+It is not a `Modal` with an `<img>` in it, and the difference is not
+cosmetic: a `Modal` with no `title` renders no close button, which would
+leave Escape and the scrim as the only ways out.
+
+### `PhotoExpand`
+The control that opens one. A 46px inked square pinned **bottom-left** of an
+art well — the one corner free on every card in the product (listings carry
+the condition badge top-left, "For rent" top-right, the price slab
+bottom-right; events carry the category top-left and a slab bottom-right;
+lost-and-found carries Lost/Found top-left and "Back with its owner"
+top-right).
+
+Always visible, never revealed on hover: `:hover` sticks after a tap on a
+touch screen, so a reveal would either never happen or never undo. Only
+rendered when there is actually a photograph — over a placeholder icon it
+promises something that is not there.
+
+**On a card whose whole surface is clickable, it needs `z-10` and the card
+needs a stretched link, not a wrapping one.** A `<button>` inside an `<a>` is
+invalid HTML; `ListingCard` therefore puts the one real link on the title
+with `after:absolute after:inset-0` and lets this button sit above it. Nest
+them and the control becomes unclickable — `tests/e2e/photo-lightbox.test.mjs`
+fails if the `z-10` is removed.
+
 ### `Skeleton`
 Flat halftone block that breathes between 55% and 85% opacity. No shimmer
 sweep — that needs a gradient.
@@ -224,6 +259,23 @@ still shows for placeholders and while an image loads.
 "just a little contrast" one. The same applies to avatars: people should be
 recognisable.
 
+### Two modifiers on the art well
+
+`.art--zoom` — the image scales to 1.07 while the card is hovered or
+focused. A **state**, the same category as a button's shadow collapsing on
+`:active`, not an animation: it is behind `@media (hover: hover) and
+(pointer: fine)` so a tap on a phone cannot leave a photo stuck zoomed, and
+it has a `:focus-visible` arm so a card reached by keyboard behaves like one
+under a cursor. The well already clips, so scaling the **image** is what
+produces the zoom — scaling the panel instead fights the clip-path that inks
+its border and bleeds over the 9px gutter. The global reduced-motion guard
+flattens the transition, which leaves a plain static photo.
+
+`.art.photo--full` — `object-fit: contain` instead of `cover`, for the
+lightbox, whose whole job is to show the photo whole. The halftone ground
+shows in the letterbox around it, which is the theme working *around* the
+photograph rather than on top of it.
+
 ---
 
 ## 6. Motion
@@ -238,6 +290,9 @@ component — go through a helper, or the reduced-motion guard leaks.
 | `slabIn(t)` | Price slabs scale in on the x-axis from the right, delayed until after the wipe |
 | `stampIn(t)` | Caption boxes land like a rubber stamp — `back.out(2.2)` overshoot |
 | `lineIn(t)` | Bangers headline lines snap in off the left with a slight skew |
+| `cueIn(t)` / `cueOut(t)` | The scroll nudge rises from the bottom edge, and leaves quickly |
+| `lightboxIn(scrim, sheet)` / `lightboxOut(...)` | A photo opened full size: the scrim fades, the sheet wipes |
+| `photoSwap(t)` | Stepping to the next photo — the same wipe, quicker. Deliberately **not** a cross-fade: a fade between two photographs reads as a slideshow, and nothing else here fades between two states |
 
 Shared constants: `EASE` (`power3.out`), `WIPE_DURATION` (`.4`), `STAGGER`
 (`.06`), `HIDDEN` / `SHOWN` clip paths.

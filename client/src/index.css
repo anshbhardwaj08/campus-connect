@@ -172,6 +172,51 @@
     object-fit: cover;
   }
 
+  /* --- Art well: hover zoom ----------------------------------------------
+     A state, not an animation — the same category as the button's shadow
+     collapsing on :active. It needs a pointer, so it is behind a hover
+     query: on a touch screen `:hover` sticks after a tap and the photo
+     would stay zoomed with no way to put it back.
+
+     The well already clips (`overflow: hidden`), so scaling the image
+     inside is what produces the zoom. Scaling the PANEL instead would
+     fight the clip-path that inks its border and bleed over the 9px
+     gutter.
+
+     1.07 deliberately: enough to register as alive under the cursor, not
+     enough to soften a photograph a buyer is trying to judge an item by.
+     The global prefers-reduced-motion guard at the bottom of this file
+     flattens the transition to nothing, which leaves a plain static photo
+     — the right outcome, and why there is no separate guard here. */
+  .art--zoom img {
+    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .group:hover .art--zoom img {
+      transform: scale(1.07);
+    }
+  }
+
+  /* Keyboard parity: a card reached by tab gets the same zoom a cursor
+     gets. `:focus-visible` on the group, so a mouse click does not leave a
+     card stuck zoomed after navigation. */
+  .group:focus-visible .art--zoom img,
+  .group:has(:focus-visible) .art--zoom img {
+    transform: scale(1.07);
+  }
+
+  /* --- Art well: a photo opened full size --------------------------------
+     `.art.photo img` is `object-fit: cover`, which is right for a card —
+     fill the well, crop the overflow. It is wrong for the lightbox, whose
+     whole job is to show the photo whole. `contain` instead, and the
+     halftone ground shows in the letterbox around it, which is the theme
+     doing its work around the photograph rather than on top of it. */
+  .art.photo--full img {
+    object-fit: contain;
+  }
+
   /* --- Caption box -------------------------------------------------------
      Narration, not a label. "Meanwhile, two floors up" is a caption.
      "Product details" is a heading and belongs in Work Sans.

@@ -2053,6 +2053,84 @@ companion filter fails exactly three of them and no others.
 
 Full suite: 339 passing.
 
+## Photos open, and sellers can frame them (2026-11-22)
+
+Two things, both about the same complaint: a photograph on this board was
+only ever visible at the size the grid gave it.
+
+**A photo opens full size** from a card in Browse, Events and Lost & Found,
+and from a listing page. `ui/Lightbox` + `ui/PhotoExpand`, both specced in
+`docs/design-system.md`. On a listing page the thumbnail strip gained a
+second meaning: the first press on a thumbnail is "show me this one", a
+press on the one you are already on is "closer".
+
+**A seller can crop before uploading.** `listing/CropModal`, wired into
+`ImagePicker`, which is the single upload surface for listings, events AND
+lost & found — so one change covered all three forms.
+
+**Cards zoom under the cursor.** `ListingCard` already carried a `group`
+class with no `group-hover:` rule anywhere, so the hover zoom had been
+intended and never built. It is `.art--zoom` now.
+
+### The listing card is no longer one big link
+
+This is the part to know before touching `ListingCard`. It was
+`Panel as={Link}` — the whole card one `<a>` — and **an expand button cannot
+live inside that**: a `<button>` inside an `<a>` is invalid HTML and
+browsers and screen readers disagree about which one a click belongs to.
+
+So the card uses a **stretched link**: the title carries the one real `<a>`
+with `after:absolute after:inset-0`, which keeps every part of the card
+clickable, and `PhotoExpand` sits above it on `z-10`. One link, one button,
+no nesting, and only a normal titled link in the accessibility tree.
+
+Remove that `z-10` and the stretched link covers the button, which looks
+like nothing at all going wrong. `tests/e2e/photo-lightbox.test.mjs` fails
+when it is removed — and fails *only* on the Browse card, while the
+lost-and-found one (no stretched link) still passes, which is the right
+discrimination.
+
+### Decisions that are not obvious from the code
+
+- **The expand control is always visible, not revealed on hover.** `:hover`
+  sticks after a tap on a touch screen, so a reveal would either never
+  happen or never undo. It is also more discoverable, and an inked square
+  with a glyph belongs on this page anyway.
+- **Bottom-left, everywhere.** It is the one corner free on all three card
+  types; the other three are taken by badges and the price slab. One place
+  means a student learns it once.
+- **4:3 crop, not free-form.** That is the shape of the wells it crops for.
+  A free-form crop lets somebody produce a 3:1 letterbox that the card then
+  crops *again*, which is worse than not offering it.
+- **Pan and zoom, not drag-handles.** The frame stays put and the photo
+  moves under it — the gesture from every phone gallery, and it cannot
+  produce an invalid selection.
+- **The crop is optional and non-destructive.** Nothing runs unless asked,
+  and the original file is kept until "Use this crop" is pressed. "Keep the
+  original" is the other button, and it says what it does.
+- **`photoSwap` is a wipe, not a cross-fade.** A fade between two
+  photographs reads as a slideshow, and nothing else in this system fades
+  between two states.
+- **Crop geometry is derived, never stored twice.** `userOffset` is null
+  until somebody drags, and the offset in use is computed and clamped on
+  every render. The first version stored the offset and used an effect to
+  tidy up after a zoom, with `offset === {0,0}` as its "still centred"
+  sentinel — which is a legitimate clamped value, so dragging to the left
+  edge and then zooming threw the framing away.
+
+### Known limits
+
+- **The wanted board has no photos to open.** `LookingFor` has no image
+  field at all — not on the model, the API or the form — so there is nothing
+  there to pop up or crop. See roadmap item 9.
+- **EXIF orientation is not corrected.** A photo straight off a phone that
+  relies on an orientation flag can crop rotated, because `drawImage` reads
+  raw pixels while `<img>` honours the flag. Not hit in testing on desktop
+  screenshots; worth a look if a real phone upload comes out sideways.
+- Covered by `tests/e2e/photo-lightbox.test.mjs` (4 tests). The existing
+  `navigation`, `smoke`, `goes-with` and `community` e2e tests all still
+  pass, which is what clears the card refactor.
+
 ## Next up
 
 **The student-facing product loop is closed end to end, and every screen in

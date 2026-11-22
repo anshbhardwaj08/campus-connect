@@ -9,6 +9,8 @@ import { Link } from 'react-router-dom';
 import { Package, MapPin, Eye, Clock, Heart, Share2, Wallet } from 'lucide-react';
 
 import Panel from '../ui/Panel';
+import PhotoExpand from '../ui/PhotoExpand';
+import Lightbox from '../ui/Lightbox';
 import Badge from '../ui/Badge';
 import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
@@ -33,6 +35,10 @@ export default function ListingDetail({
   relisting = false,
 }) {
   const [activeImage, setActiveImage] = useState(0);
+  // The gallery already picks WHICH photo is shown; this only decides
+  // whether it is shown full size, so the two pieces of state stay separate
+  // and the lightbox always opens on whatever the student was looking at.
+  const [zoomed, setZoomed] = useState(false);
 
   const {
     title,
@@ -64,8 +70,10 @@ export default function ListingDetail({
       <div className="grid gap-[9px] lg:grid-cols-12">
         {/* --- Gallery ------------------------------------------------- */}
         <div className="lg:col-span-7">
-          <Panel index={0} flush>
-            <div className={`art relative h-[300px] sm:h-[420px] ${photo ? 'photo' : ''}`}>
+          <Panel index={0} flush className="group">
+            <div
+              className={`art art--zoom relative h-[300px] sm:h-[420px] ${photo ? 'photo' : ''}`}
+            >
               {photo ? (
                 <img src={photo} alt={title} />
               ) : (
@@ -85,6 +93,15 @@ export default function ListingDetail({
               <span className={`slab ${isFree ? 'slab--free' : ''}`}>
                 {isFree ? 'FREE' : formatRate(price, isRent ? rentPeriod : null)}
               </span>
+
+              {/* Condition is the thing a buyer is squinting at, and 420px of
+                  a scratched desk is not enough to judge it by. */}
+              {photo && (
+                <PhotoExpand
+                  onClick={() => setZoomed(true)}
+                  label={`View photo of ${title} full size`}
+                />
+              )}
             </div>
           </Panel>
 
@@ -94,8 +111,12 @@ export default function ListingDetail({
                 <button
                   key={src}
                   type="button"
-                  onClick={() => setActiveImage(i)}
-                  aria-label={`Photo ${i + 1}`}
+                  // Pressing the thumbnail you are already on opens it full
+                  // size. The first press is "show me this one", the second
+                  // is "closer" — which is what a second press on the same
+                  // thing means everywhere else too.
+                  onClick={() => (i === activeImage ? setZoomed(true) : setActiveImage(i))}
+                  aria-label={i === activeImage ? `View photo ${i + 1} full size` : `Photo ${i + 1}`}
                   aria-current={i === activeImage}
                   className={`art photo h-[58px] border-2 transition-colors ${
                     i === activeImage ? 'border-crimson' : 'border-ink'
@@ -277,6 +298,16 @@ export default function ListingDetail({
           </Panel>
         </div>
       </div>
+
+      {photo && (
+        <Lightbox
+          images={images}
+          index={activeImage}
+          isOpen={zoomed}
+          onClose={() => setZoomed(false)}
+          alt={title}
+        />
+      )}
     </div>
   );
 }

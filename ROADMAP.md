@@ -75,19 +75,17 @@ but it resets daily rather than accumulating, so a bulk send cannot borrow
 against tomorrow.
 
 
-### 1. The live board is empty · **S** · *was "remove the demo data"*
+### 1. Remove the demo data before any real launch · **S**
 
-Checked 2026-11-20: `demo.seed@pec.edu.in` is gone and **`listings` holds
-zero documents**, so there is nothing left to remove — this item is done in
-the sense it was written. What replaced it is the opposite problem: 14 users,
-13 wanted posts, 7 lost-and-found items, 3 carpools and 2 deals remain, and
-not one listing for any of them to be about.
+The board was empty on 2026-11-20 — `demo.seed@pec.edu.in` and every listing
+gone — which made cross-sell, "more like this" and browse search invisible
+and unmeasurable. **Re-seeded 2026-11-21**: 16 listings and 7 wanted posts,
+with `match:run` and `crosssell:run` behind them, and all four AI features
+verified against it. `docs/demo-script.md` is written around this data, so
+removing it invalidates that document.
 
-That makes everything built on the board invisible and unmeasurable:
-cross-sell, "more like this", browse search and `npm run similar:run` all
-have nothing to work on. Re-seed with `npm run seed:demo -- --for <email>`
-before demoing or tuning anything, and keep the remove command
-(`-- --for <email> --remove --commit`) for the real launch.
+So this is back to what it originally said: take it off before a real
+launch, not before. `npm run seed:demo -- --for <email> --remove --commit`.
 
 ---
 
@@ -144,7 +142,25 @@ origin is `capacitor://localhost`, so the httpOnly `sameSite: lax` cookies
 are not sent to the Render domain and **every request returns 401**. Needs a
 token auth path alongside the cookie one.
 
-### 8. Housekeeping
+### 8. Photos on the wanted board · **M**
+
+Browse, Events and Lost & Found all open a photo full size now, and all
+three upload forms can crop. **The wanted board cannot do either, because
+`LookingFor` has no image field** — not on the model, not in the API, not on
+the form. There is nothing to show.
+
+It is not a viewer change, it is a feature: a reference photo is genuinely
+useful on a wanted post ("a cycle like this one", "this edition of the
+textbook"), and it would feed the matchers, which currently read only title
+and description. Model field → multer route → `ImagePicker` on the form
+(which already does crop) → `PhotoExpand` on the card. The viewer and the
+cropper are already built and shared, so this is mostly plumbing.
+
+Worth deciding rather than assuming: a wanted post with a photo of the thing
+somebody *wants* can be mistaken for a listing of the thing they *have*. The
+card would need to say which it is, the way Lost & Found says LOST or FOUND.
+
+### 9. Housekeeping
 
 - [ ] **Rotate the Redis password** — it was legible in a screenshot on
       2026-09-22 and should be treated as public. Redis Cloud -> Security ->

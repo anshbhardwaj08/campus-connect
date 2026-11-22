@@ -1,8 +1,11 @@
 // Something happening on campus. The date carries the urgency, so it gets
 // the slab treatment a price gets on a listing — same shape, different fact.
+import { useState } from 'react';
 import { MapPin, Users, Calendar } from 'lucide-react';
 
 import Panel from '../ui/Panel';
+import PhotoExpand from '../ui/PhotoExpand';
+import Lightbox from '../ui/Lightbox';
 import Badge from '../ui/Badge';
 import Avatar from '../ui/Avatar';
 import Button from '../ui/Button';
@@ -33,18 +36,25 @@ export default function EventCard({
     organizerId: organizer,
   } = event;
 
+  const [zoomed, setZoomed] = useState(false);
   const soon = whenRelative(date);
   const past = soon === 'Already gone';
   const isMine = String(organizer?._id || organizer) === String(currentUserId);
 
   return (
-    <Panel index={index} flush className="h-full">
+    <Panel index={index} flush className="group h-full">
       <div className="flex h-full flex-col">
-        <div className={`art relative h-[132px] shrink-0 ${imageUrl ? 'photo' : ''}`}>
+        <div className={`art art--zoom relative h-[132px] shrink-0 ${imageUrl ? 'photo' : ''}`}>
           {imageUrl ? (
             <img src={imageUrl} alt={title} loading="lazy" />
           ) : (
             <Calendar className="h-9 w-9 text-ink/25" strokeWidth={1.75} />
+          )}
+
+          {/* An event poster carries the detail that will not fit on a card
+              — the room number, the timings, who is playing. */}
+          {imageUrl && (
+            <PhotoExpand onClick={() => setZoomed(true)} label={`View poster for ${title}`} />
           )}
 
           {category && (
@@ -130,6 +140,9 @@ export default function EventCard({
           </div>
         </div>
       </div>
+      {imageUrl && (
+        <Lightbox images={[imageUrl]} isOpen={zoomed} onClose={() => setZoomed(false)} alt={title} />
+      )}
     </Panel>
   );
 }
