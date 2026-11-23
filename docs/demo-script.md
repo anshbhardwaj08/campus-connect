@@ -205,6 +205,50 @@ feature was measured rather than guessed.
 
 ---
 
+## 5. The photograph IS the request
+
+Needs a wanted post with a photo on it, so it is the one item here you have
+to set up: post a want with the title **"need one of these"**, no useful
+description, and a photo of a cycle. Then run `npm run match:run`.
+
+What to say while it runs: a want is the one thing on this product that is
+reliably badly written. "Need one of these", "same as in the pic", "this
+edition of the textbook" — the photograph is the request and the words are a
+gesture at it. So the model is asked what is in the photo, and that
+description is embedded along with the student's own words.
+
+The numbers to have ready, measured on this board on 2026-11-23 with the
+photo of a bicycle:
+
+| | words only | with the caption |
+|---|---|---|
+| Firefox single-speed cycle | 0.634 | **0.671** |
+| Hercules Roadeo 26in gear cycle | 0.634 | **0.666** |
+| Mini fridge, 90 litres | 0.640 | 0.566 |
+| Cengel Thermodynamics | 0.601 | 0.534 |
+| **over the 0.66 bar** | **0** | **2** |
+
+**The point to make out loud: the band separates.** On the words alone
+everything sits between 0.59 and 0.65 — "need one of these" is
+near-equidistant from the whole board, which is the uselessness this exists
+to fix. The caption does not merely lift the two cycles over the bar, it
+pushes the fridge and the textbook down seven to eight points. That is why
+the threshold did not have to be re-tuned.
+
+If asked **"why not a multimodal embedding?"** — the honest answer is the
+threshold. 0.66 was calibrated by measuring this board; a second vector
+space needs its own number measured the same way, and there is no
+photographed board to measure it on yet. The caption puts the picture into
+the space that is already calibrated. One vector per document, one space,
+one number. (Also: Google's multimodal embedding is on Vertex AI, which
+wants a GCP project rather than the API key everything else here uses.)
+
+And the control, which is again worth volunteering: handed a photo of two
+people rather than an object, the model returns an **empty** caption and
+nothing is embedded.
+
+---
+
 ## If a panelist asks "where is the vector database?"
 
 There isn't one, on purpose. Cosine in Node over a few hundred listings is
@@ -224,6 +268,11 @@ it is unusual:
 - browse search → keeps the keyword results
 - "more like this" → falls back to same-category, newest first
 - cross-sell → falls back to a hand-written companion map, then to nothing
+- reading a want's photo → no caption is written, and the post matches on
+  its words exactly as it always could. A provider that cannot see pictures
+  is **never asked**, rather than asked and trusted: it would answer from
+  the title alone and hand back a confident description of a photo it never
+  saw, and an embedded guess is indistinguishable from an embedded fact
 - **saved-search alerts → go silent.** The one exception, deliberately: an
   unprompted notification has a higher bar than a page somebody is already
   looking at, and "we found nothing" beats "we found the wrong thing at

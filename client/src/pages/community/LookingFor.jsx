@@ -40,16 +40,24 @@ export default function LookingFor() {
   const categories = useCategories();
   const queryClient = useQueryClient();
   const [category, setCategory] = useState('');
+  // The board asks two questions now, and a seller with a cycle to hire out
+  // wants only one of them. Empty means both.
+  const [wantType, setWantType] = useState('');
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(BLANK);
   const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
 
   const { data: posts, isLoading } = useQuery({
-    queryKey: ['lookingfor', category],
+    queryKey: ['lookingfor', category, wantType],
     queryFn: () =>
       api
-        .get('/lookingfor', { params: category ? { category } : {} })
+        .get('/lookingfor', {
+          params: {
+            ...(category ? { category } : {}),
+            ...(wantType ? { listingType: wantType } : {}),
+          },
+        })
         .then((r) => r.data.data.posts),
   });
 
@@ -110,10 +118,35 @@ export default function LookingFor() {
         onAction={isAuthenticated ? () => setOpen(true) : undefined}
         filters={
           <>
-            <FilterChip active={!category} onClick={() => setCategory('')}>
+            {/* Two filters on two different axes in one wrapping row, so the
+                words have to carry which is which: "To buy" cannot be read
+                as a category and "Books" cannot be read as an intent.
+
+                "Everything" clears BOTH — it is the show-me-the-whole-board
+                reset, which is what it already meant. A second "all" chip
+                for the type axis would be the ambiguous version of this.
+
+                Four categories rather than six, because the row wraps to
+                three lines on a phone otherwise. The type split is the one
+                that changes what the board is FOR; a category on a board of
+                thirteen posts mostly returns nothing. */}
+            <FilterChip
+              active={!category && !wantType}
+              onClick={() => {
+                setCategory('');
+                setWantType('');
+              }}
+            >
               Everything
             </FilterChip>
-            {categories.slice(0, 6).map((c) => (
+            <FilterChip active={wantType === 'sale'} onClick={() => setWantType('sale')}>
+              To buy
+            </FilterChip>
+            <FilterChip active={wantType === 'rent'} onClick={() => setWantType('rent')}>
+              To rent
+            </FilterChip>
+
+            {categories.slice(0, 4).map((c) => (
               <FilterChip key={c.slug} active={category === c.slug} onClick={() => setCategory(c.slug)}>
                 {c.name}
               </FilterChip>
@@ -123,7 +156,13 @@ export default function LookingFor() {
         loading={isLoading}
         isEmpty={!posts?.length}
         emptyTitle="NOBODY WANTING"
-        emptyText="No open wants right now. Post what you are after and sellers will see it."
+        emptyText={
+          wantType === 'rent'
+            ? 'Nobody is asking to borrow anything right now.'
+            : wantType === 'sale'
+              ? 'Nobody is asking to buy anything right now.'
+              : 'No open wants right now. Post what you are after and sellers will see it.'
+        }
       >
         {posts?.map((post, i) => (
           <div key={post._id} className={COMMUNITY_SPAN}>

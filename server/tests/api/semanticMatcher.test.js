@@ -123,6 +123,90 @@ describe('matching on meaning', () => {
 
 // --- the rules it does not get to bend ------------------------------------
 
+// --- the photograph -------------------------------------------------------
+
+// A wanted post may carry a caption of its reference photo, written by the
+// hourly job (services/photoCaption.service.js). The matcher knows nothing
+// about photographs: the caption is simply part of the text the post is
+// embedded from, which is what makes the picture reach the matching.
+//
+// The stand-in embedder makes the point cleanly — it keys off words, so a
+// post whose title holds no word for the thing produces a vector pointing
+// nowhere, exactly as a real embedding of "need one of these" would be
+// uselessly vague.
+describe('a want whose request is the picture', () => {
+  test('words alone find nothing, and the caption finds it', async () => {
+    const listing = await makeListing(seller._id, {
+      title: 'Hercules Roadeo 26in',
+      status: 'active',
+    });
+    const matcher = createSemanticMatcher(stub());
+
+    const vague = await makeWanted({ title: 'need one of these', description: 'as in the photo' });
+    assert.equal((await matcher.findMatches(vague)).length, 0, 'nothing to go on');
+
+    const described = await makeWanted({
+      title: 'need one of these',
+      description: 'as in the photo',
+      photoCaption: { text: 'a black Hercules gear cycle, 26 inch', model: 'x', at: new Date() },
+    });
+
+    const matches = await matcher.findMatches(described);
+    assert.equal(matches.length, 1);
+    assert.equal(String(matches[0].listing._id), String(listing._id));
+  });
+
+  // The caption arrives AFTER the post was first embedded, so the cached
+  // vector has to be spotted as stale. Nothing special does that — the
+  // caption is in the hashed text, so the existing staleness check sees it.
+  test('a caption added later makes the cached vector stale', async () => {
+    await makeListing(seller._id, { title: 'Hercules Roadeo 26in', status: 'active' });
+    const embedder = stub();
+    const matcher = createSemanticMatcher(embedder);
+
+    const wanted = await makeWanted({ title: 'need one of these' });
+    await matcher.findMatches(wanted);
+
+    const firstHash = (await LookingFor.findById(wanted._id).select('+embedding')).embedding
+      .sourceHash;
+
+    await LookingFor.updateOne(
+      { _id: wanted._id },
+      { $set: { photoCaption: { text: 'a black Hercules gear cycle', model: 'x', at: new Date() } } }
+    );
+    const withCaption = await LookingFor.findById(wanted._id).select('+embedding +photoCaption');
+
+    const matches = await matcher.findMatches(withCaption);
+
+    const secondHash = (await LookingFor.findById(wanted._id).select('+embedding')).embedding
+      .sourceHash;
+    assert.notEqual(secondHash, firstHash, 'the text it was embedded from changed');
+    assert.equal(matches.length, 1, 'and it matches now');
+  });
+
+  // The guard that keeps this from costing the whole board. `sourceHash`
+  // joins whatever it is handed, so appending an always-present third
+  // element — empty for every document that has no caption — would change
+  // every hash in the database and re-embed everything, once, for nothing.
+  test('a post with no caption hashes exactly as it did before', async () => {
+    const matcher = createSemanticMatcher(stub());
+    // A candidate has to exist, or the matcher returns before it embeds the
+    // query at all and there is no cached vector to look at.
+    await makeListing(seller._id, { title: 'Hercules Roadeo 26in', status: 'active' });
+
+    const wanted = await makeWanted({ title: 'need a cycle' });
+    await matcher.findMatches(wanted);
+    const stored = await LookingFor.findById(wanted._id).select('+embedding');
+
+    const { sourceHash } = require('../../src/matchers/vector');
+    assert.equal(
+      stored.embedding.sourceHash,
+      sourceHash(wanted.title, wanted.description),
+      'still the hash of just the two fields'
+    );
+  });
+});
+
 describe('eligibility is not a matcher decision', () => {
   test('never offers somebody their own listing', async () => {
     await makeListing(student._id, { title: 'Hercules bike', status: 'active' });

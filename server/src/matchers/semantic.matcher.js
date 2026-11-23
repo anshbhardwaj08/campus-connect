@@ -57,7 +57,24 @@ const THRESHOLD = Number(process.env.SEMANTIC_THRESHOLD) || 0.66;
 // by the next run an hour later; nothing is lost, it just arrives late.
 const EMBED_BUDGET_PER_RUN = 200;
 
-const textOf = (doc) => [doc.title, doc.description];
+// The text a document is embedded from.
+//
+// A wanted post may carry a caption of its reference photo, written by the
+// hourly job (services/photoCaption.service.js), and when it does the photo
+// is usually the most specific thing about the request — "this edition of
+// the textbook" is a sentence a picture answers and words do not.
+//
+// Appended only when it exists, rather than always and empty. `sourceHash`
+// joins whatever it is handed, so a third element that is sometimes '' would
+// change the hash of every document in the database and re-embed the entire
+// board — once, at real cost, for no change in meaning. This way only the
+// posts that actually gained a caption look stale, which is exactly right:
+// they did.
+const textOf = (doc) => {
+  const base = [doc.title, doc.description];
+  const caption = doc.photoCaption?.text;
+  return caption ? [...base, caption] : base;
+};
 
 const createSemanticMatcher = (embedder) => {
   /**

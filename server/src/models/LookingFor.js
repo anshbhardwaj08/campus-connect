@@ -51,6 +51,30 @@ const lookingForSchema = new mongoose.Schema(
       select: false,
       default: undefined,
     },
+    // What the model saw in the reference photo, in words, so the photo can
+    // reach the embedding — the matchers read text and a photograph is often
+    // the whole request ("need one of these"). Written by the hourly job,
+    // never on a request path. See services/photoCaption.service.js for why
+    // this is a caption and not a second, multimodal vector.
+    //
+    // `select: false` because it is NEVER shown: it is machine-written, it is
+    // sometimes wrong, and a student would read it as the product putting
+    // words in their mouth. It exists to be embedded and nothing else.
+    //
+    // Keyed on `sourceUrl`, not a hash of the bytes — Cloudinary gives every
+    // upload its own URL, so a new photo is a new URL, and re-downloading a
+    // megabyte to decide whether to re-read it would cost what the cache
+    // saves.
+    photoCaption: {
+      type: {
+        text: String,
+        model: String,
+        sourceUrl: String,
+        at: Date,
+      },
+      select: false,
+      default: undefined,
+    },
     expiresAt: {
       type: Date,
       default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),

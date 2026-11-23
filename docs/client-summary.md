@@ -51,11 +51,16 @@ verified against the live API.
   (photos, resolve), Carpool (post/remove), Wanted (post/fulfil)
 - **The wanted board** — a want says whether it wants to **buy or to rent**,
   and a rental want says what its budget is *per*; the matcher filters on
-  both, because a hire is a different question and not a cheaper answer. Up
-  to three reference photos ("a cycle like this one"), cropped by the same
-  picker the sell form uses. Every card is stamped WANTED and its budget
-  reads "up to ₹600" — a want with a photo on it would otherwise look like
-  a listing, which invites the opposite action
+  both, because a hire is a different question and not a cheaper answer. The
+  board filters by the same split ("To buy" / "To rent"), so somebody with a
+  cycle to hire out can find the people asking to borrow one. Up to three
+  reference photos ("a cycle like this one"), cropped by the same picker the
+  sell form uses — and **the matcher reads them**: the hourly job has the
+  model describe the lead photo and embeds that description with the post's
+  own words, which is what lets "need one of these" find anything at all.
+  Every card is stamped WANTED and its budget reads "up to ₹600" — a want
+  with a photo on it would otherwise look like a listing, which invites the
+  opposite action
 - **Report** — `report/ReportButton` on a listing (seller panel) and on a
   public profile. Fixed reason list + optional detail; hidden when signed
   out or on your own listing. Idempotent: reporting twice while the first

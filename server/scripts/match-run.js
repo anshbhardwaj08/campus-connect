@@ -31,6 +31,10 @@ const main = async () => {
   const after = await Notification.countDocuments({ type: 'wanted_match' });
 
   console.log(`Checked ${result.checked} open wanted post(s), notified ${result.notified}.`);
+  // Only interesting when there were photographs to read. A want with a
+  // reference photo gets it described and the description embedded with its
+  // words — see services/photoCaption.service.js.
+  if (result.photosRead) console.log(`Reference photos read by the model: ${result.photosRead}`);
   console.log(`Notifications: ${before} -> ${after}`);
 
   if (after > before) {

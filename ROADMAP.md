@@ -38,7 +38,9 @@ unnoticed.
 
 What still works on the deployed site is whatever the hourly job *stored*:
 the bell notifications and the "goes with this" strip. What is computed per
-request — browse's second tier and "more like this" — does not. Set
+request — browse's second tier and "more like this" — does not. And with no
+key the job stores nothing new, so a reference photo on a wanted post is
+never read either (see CONTEXT.md, "the matcher reads the photograph"). Set
 `GEMINI_API_KEY` (and check `REDIS_URL`, or no job runs at all) under
 Render → `campus-connect` → Environment. See `docs/demo-script.md`.
 
@@ -87,11 +89,23 @@ removing it invalidates that document.
 So this is back to what it originally said: take it off before a real
 launch, not before. `npm run seed:demo -- --for <email> --remove --commit`.
 
+### 2. Run the e2e suite · **S** · *blocked on disk space*
+
+`C:` is at zero bytes free, so the vite dev server cannot start and
+`client/tests/e2e` has not run since the wanted-board filter and the photo
+captioning went in. The server suite (373 tests) and the client build are
+both green; it is only the browser suite that is unrun.
+
+`client/tests/e2e/wanted-board.test.mjs` has a filter test in it that has
+never been executed once. Clear some space on `C:` — `npm cache clean
+--force` alone frees about 4.9 GB — then
+`npm run test:e2e --prefix client`.
+
 ---
 
 ## Next
 
-### 2. The scam gate cannot fire · **S** · *bug*
+### 3. The scam gate cannot fire · **S** · *bug*
 
 `utils/scamScore.js` is called as `calculateScamScore(req.body)`, but
 `categoryAvgPrice` is never in the body, so the 40-point price branch never
@@ -102,7 +116,7 @@ unreachable by that path.
 Fix the arithmetic, pass a real category average, and add a test that proves
 a listing can actually reach the queue.
 
-### 3. Delete `services/ai.service.js` · **S**
+### 4. Delete `services/ai.service.js` · **S**
 
 `suggestPrice` and `getScamScore` were written and never imported by
 anything, and are now superseded: generation lives in `src/generators/`, on
@@ -113,7 +127,7 @@ code. Drop the `openai` dependency with it — nothing else uses it.
 
 ## Later
 
-### 4. Make it installable (PWA) · **M**
+### 5. Make it installable (PWA) · **M**
 
 `CLAUDE.md` calls the client a PWA. There is no manifest and no service
 worker — it is not one. Adding them buys "Add to Home Screen": real icon,
@@ -121,38 +135,33 @@ fullscreen, no browser chrome.
 
 **Do this before Capacitor.** Most of the benefit, none of the auth problem.
 
-### 5. Fix the cold start · **S** · *blocks 4 and 6*
+### 6. Fix the cold start · **S** · *blocks 5 and 7*
 
 Render's free tier spins the server down after inactivity, so a cold open
 takes the better part of a minute. An app icon that hangs for fifty seconds
 is uninstalled once and never opened again. An uptime ping or the paid tier.
 
-### 6. Capacitor · **L**
+### 7. Capacitor · **L**
 
 The packaging is the easy part. The real work: in a Capacitor WebView the
 origin is `capacitor://localhost`, so the httpOnly `sameSite: lax` cookies
 are not sent to the Render domain and **every request returns 401**. Needs a
 token auth path alongside the cookie one.
 
-### 7. A buy / rent filter on the wanted board · **S**
+### 8. Caption the listings too, not just the wants · **M**
 
-The board asks two questions now and offers no way to see one of them. A
-student with a cycle to hire out cannot narrow to the people who want to
-rent — which is most of the reason to read that board at all.
+A wanted post's reference photo is read by the model and embedded with its
+words; a listing's photos are not. Measured on 2026-11-23, captioning the
+*want* alone took a vague request from 0 matches to 2 — see CONTEXT.md.
 
-`getAll` needs one query param; the filter row needs two chips. The row
-already holds "Everything" plus six categories, so the work is deciding what
-gives, not writing it.
+Doing the listings as well would help on the other side of the same
+comparison, and `services/photoCaption.service.js` already does the work;
+what it needs is a budget decision, because it is one model call per
+photographed listing rather than per want, and `semantic.matcher.js` would
+have to pass `+photoCaption` through the candidate query.
 
-### 8. Let the matchers look at the photo · **L**
-
-A want carries a reference photo now and nothing reads it: both matchers see
-title and description only. "This edition of the textbook" is a sentence a
-photograph answers much better than words do.
-
-Needs an image embedding — a different model, a different cost, and a second
-vector per document. Worth it only once there are enough photos on the board
-to tell whether it helps.
+Worth it once there are photographed wants on the board to measure against.
+Right now there are none, so there is nothing to measure.
 
 ### 9. Housekeeping
 

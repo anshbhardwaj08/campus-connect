@@ -53,7 +53,7 @@ is why there is no supertest and nothing is mocked.
 
 ## What it covers
 
-353 tests.
+373 tests.
 
 | File | | What it is for |
 |---|---|---|
@@ -70,8 +70,9 @@ is why there is no supertest and nothing is mocked.
 | `api/listings` | 15 | browse, filters, who may change a listing |
 | `api/retrieval` | 8 | retrieval on browse search and saved-search alerts, and when it may run |
 | `api/similar` | 12 | "more like this, under ₹X" — ranking, the price rule, the fallback |
-| `api/semanticMatcher` | 15 | the matcher's machinery: caching, batching, staleness, fallback |
-| `api/wantedMatch` | 27 | which listings answer a wanted post — buying is not renting — and what the student is told |
+| `api/semanticMatcher` | 18 | the matcher's machinery: caching, batching, staleness, fallback, and the photo caption reaching the vector |
+| `api/wantedMatch` | 30 | which listings answer a wanted post — buying is not renting — what the student is told, and narrowing the board |
+| `api/photoCaption` | 14 | reading a want's reference photo — what is never asked, and never fetched |
 | `api/crossSell` | 22 | "goes with this" — what the app does with whatever a model returns |
 | `api/deals` | 22 | the handshake, its guards, and reviews |
 | `api/rental` | 24 | the hire clock end to end, including the daily job |

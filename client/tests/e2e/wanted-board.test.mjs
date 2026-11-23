@@ -230,3 +230,50 @@ test('a student can post a rental want through the form', async () => {
     await tab.close_();
   }
 });
+
+// The board asks two questions, so it has to be able to show one of them.
+// Somebody with a cycle to hire out is looking for the people asking to
+// borrow one, not the dozen asking to buy.
+test('the board can be narrowed to the people who want to rent', async () => {
+  const student = await makeUser({ name: 'Asker' });
+  await makeWant(student._id, { title: 'Table lamp to keep' });
+  await makeWant(student._id, {
+    title: 'Table lamp for exam week',
+    listingType: 'rent',
+    rentPeriod: 'week',
+  });
+
+  const tab = await openTab();
+
+  try {
+    await tab.go('/looking-for');
+    await waitForText(tab, 'Table lamp to keep');
+    await waitForText(tab, 'Table lamp for exam week');
+
+    await press(tab, 'To rent');
+    await tab.waitForFunction(
+      () => !document.body.textContent.includes('Table lamp to keep'),
+      { timeout: 20000 }
+    );
+    assert.match(await tab.evaluate(() => document.body.textContent), /Table lamp for exam week/);
+
+    // And back the other way, which is where a post written before the
+    // field existed would go missing if the query were a plain equality
+    // check — the earlier tests leave several of those on the board.
+    await press(tab, 'To buy');
+    await tab.waitForFunction(
+      () => !document.body.textContent.includes('Table lamp for exam week'),
+      { timeout: 20000 }
+    );
+    assert.match(await tab.evaluate(() => document.body.textContent), /Table lamp to keep/);
+
+    // "Everything" clears both filters, which is what it already meant.
+    await press(tab, 'Everything');
+    await waitForText(tab, 'Table lamp for exam week');
+
+    assert.equal(tab.errors.length, 0, `console: ${tab.errors.join(' | ')}`);
+    assert.equal(tab.failures.length, 0, `API: ${tab.failures.join(' | ')}`);
+  } finally {
+    await tab.close_();
+  }
+});

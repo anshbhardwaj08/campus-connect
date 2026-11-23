@@ -12,22 +12,68 @@
 const LookingFor = require('../models/LookingFor');
 const { findMatches, activeName } = require('../matchers');
 const { createNotification } = require('./notification.service');
+const photoCaption = require('./photoCaption.service');
 
 const MATCHES_PER_RUN = 5;
 
-const runWantedMatches = async () => {
-  // `+embedding` because the field is select:false on the model. Without it
-  // the semantic matcher sees no cached vector on any post and re-embeds
-  // every one of them on every run — which costs money hourly, forever, and
-  // shows up nowhere except the bill.
+// A ceiling on how many photographs one run will read, for the same reason
+// the embedder has one: the first run after this shipped looks at every post
+// with a photo on it, and that should not be able to turn into one large
+// bill. Whatever is left over is picked up an hour later — nothing is lost,
+// it arrives late.
+const CAPTION_BUDGET_PER_RUN = 20;
+
+/**
+ * @param {object} opts.captioner  the thing that reads a reference photo.
+ *        Injectable for the same reason the embedder is injectable into the
+ *        semantic matcher: the default one downloads an image and calls a
+ *        model, and no test may do either. Production calls this with no
+ *        arguments.
+ */
+const runWantedMatches = async ({ captioner = photoCaption } = {}) => {
+  // Both `+embedding` and `+photoCaption` are select:false on the model, and
+  // both have to be asked for here. Without `+embedding` the semantic matcher
+  // sees no cached vector on any post and re-embeds every one of them on
+  // every run — which costs money hourly, forever, and shows up nowhere
+  // except the bill. Without `+photoCaption` the same is true of every
+  // photograph, one model call at a time.
   const open = await LookingFor.find({
     status: 'open',
     expiresAt: { $gt: new Date() },
-  }).select('+embedding');
+  }).select('+embedding +photoCaption');
 
   let notified = 0;
+  // Counts photographs READ, which includes the ones the model looked at and
+  // found nothing in — that outcome is stored too, so it is not asked again.
+  let photosRead = 0;
+  let captionBudget = CAPTION_BUDGET_PER_RUN;
 
   for (const wanted of open) {
+    // Reading the photograph comes FIRST, because it changes the text the
+    // post is embedded from — and therefore makes the cached vector stale,
+    // which is how the caption reaches the matching without the matcher
+    // knowing anything about photographs. See matchers/semantic.matcher.js.
+    //
+    // Its own try/catch and its own budget: this is a different provider
+    // from the embedder, with a different way of being down, and a model
+    // that cannot look at a picture must not stop a post being matched on
+    // its words.
+    if (captionBudget > 0 && wanted.images?.length) {
+      try {
+        // Non-null means it is new and worth storing; a caption that is
+        // already good comes back as null.
+        const caption = await captioner.captionFor(wanted);
+        if (caption) {
+          captionBudget -= 1;
+          wanted.photoCaption = caption;
+          await wanted.save();
+          photosRead += 1;
+        }
+      } catch (err) {
+        console.error(`wantedMatch: could not read the photo on "${wanted.title}": ${err.message}`);
+      }
+    }
+
     // First run for this post looks at the WHOLE board, not just listings
     // newer than the post. Saved searches work the other way round on
     // purpose — you ran the search, saw the results, then saved it, so only
@@ -71,7 +117,7 @@ const runWantedMatches = async () => {
     notified += 1;
   }
 
-  return { checked: open.length, notified, matcher: activeName() };
+  return { checked: open.length, photosRead, notified, matcher: activeName() };
 };
 
 module.exports = { runWantedMatches };

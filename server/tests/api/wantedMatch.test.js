@@ -342,6 +342,54 @@ describe('posting a want over HTTP', () => {
     assert.equal(res.status, 201, res.body?.message);
     assert.deepEqual(res.body.data.post.images, []);
   });
+
+  // Somebody with a cycle to hire out wants the people asking to borrow one,
+  // not the thirteen asking to buy.
+  test('the board can be narrowed to one of the two questions', async () => {
+    await api.post('/lookingfor', { title: 'need a drafter to keep' });
+    await api.post('/lookingfor', {
+      title: 'need a drafter for one afternoon',
+      listingType: 'rent',
+      rentPeriod: 'day',
+    });
+
+    const all = await api.get('/lookingfor');
+    assert.equal(all.body.data.posts.length, 2);
+
+    const rent = await api.get('/lookingfor?listingType=rent');
+    assert.equal(rent.body.data.posts.length, 1);
+    assert.match(rent.body.data.posts[0].title, /one afternoon/);
+
+    const buy = await api.get('/lookingfor?listingType=sale');
+    assert.equal(buy.body.data.posts.length, 1);
+    assert.match(buy.body.data.posts[0].title, /to keep/);
+  });
+
+  // The posts that pre-date the field have nothing to match on, and they are
+  // purchases. Asking `listingType: 'sale'` as `$ne: 'rent'` is what keeps
+  // them on the tab they belong to — a plain equality check hides them.
+  test('a post written before the field existed still shows under "to buy"', async () => {
+    const posted = await api.post('/lookingfor', { title: 'need a calculator' });
+    await LookingFor.updateOne(
+      { _id: posted.body.data.post._id },
+      { $unset: { listingType: '' } }
+    );
+
+    const buy = await api.get('/lookingfor?listingType=sale');
+    assert.equal(buy.body.data.posts.length, 1);
+
+    const rent = await api.get('/lookingfor?listingType=rent');
+    assert.equal(rent.body.data.posts.length, 0);
+  });
+
+  // `listingType` goes into a Mongo filter, so the values are an allow-list.
+  test('an unknown type is ignored rather than filtered on', async () => {
+    await api.post('/lookingfor', { title: 'need a cycle' });
+
+    const res = await api.get('/lookingfor?listingType=barter');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.posts.length, 1, 'nonsense narrows nothing');
+  });
 });
 
 describe('what the student is told', () => {

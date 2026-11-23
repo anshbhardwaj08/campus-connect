@@ -59,7 +59,7 @@ const isAvailable = () => isPlausibleKey(process.env.GEMINI_API_KEY, { minLength
  * @param {object} schema     an OpenAPI-ish schema; see the caller
  * @returns {Promise<any>}    the parsed JSON
  */
-const askOne = async (model, prompt, schema) =>
+const askOne = async (model, prompt, schema, images = []) =>
   fetch(endpointFor(model), {
     method: 'POST',
     headers: {
@@ -70,7 +70,15 @@ const askOne = async (model, prompt, schema) =>
     },
     signal: AbortSignal.timeout(TIMEOUT_MS),
     body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: [
+        {
+          role: 'user',
+          // The text first, then the pictures. The order is the instruction:
+          // ask the question before handing over the evidence, or the model
+          // starts describing the image before it knows what for.
+          parts: [{ text: prompt }, ...images.map((image) => ({ inlineData: image }))],
+        },
+      ],
       generationConfig: {
         // Low, not zero. This is a judgement about what goes with what, and
         // it should be the same judgement tomorrow as today.
@@ -85,7 +93,7 @@ const askOne = async (model, prompt, schema) =>
     }),
   });
 
-const generateJson = async (prompt, schema) => {
+const generateJson = async (prompt, schema, { images = [] } = {}) => {
   if (!isAvailable()) throw new Error('No generator configured (GEMINI_API_KEY)');
 
   const order = preferred ? [preferred, ...MODELS.filter((m) => m !== preferred)] : MODELS;
@@ -94,7 +102,7 @@ const generateJson = async (prompt, schema) => {
 
   for (const model of order) {
     try {
-      const attempt = await askOne(model, prompt, schema);
+      const attempt = await askOne(model, prompt, schema, images);
       if (attempt.ok) {
         preferred = model;
         res = attempt;
@@ -131,4 +139,21 @@ const generateJson = async (prompt, schema) => {
 
 const describe = () => ({ name: 'gemini', model: `gemini:${preferred || MODELS[0]}` });
 
-module.exports = { generateJson, isAvailable, describe, MODELS, TIMEOUT_MS };
+/**
+ * Asks about a picture. Same call, same models, same fallback list — the
+ * flash models are multimodal, so there is no second endpoint and no second
+ * key involved.
+ *
+ * It exists as its own method rather than an option on `generateJson`
+ * because of what a missing capability would do. A text-only provider handed
+ * an `images` option it did not understand would answer the prompt anyway,
+ * from the words alone, and hand back a confident description of a photo it
+ * never saw. A separate method means `generators/index.js` can ask whether a
+ * provider can do this at all, and the caller can decline — see
+ * `canSeeImages()` there.
+ *
+ * @param {Array<{mimeType: string, data: string}>} images  base64, inline
+ */
+const describeImage = (images, prompt, schema) => generateJson(prompt, schema, { images });
+
+module.exports = { generateJson, describeImage, isAvailable, describe, MODELS, TIMEOUT_MS };

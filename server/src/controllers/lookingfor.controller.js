@@ -15,12 +15,35 @@ const create = catchAsync(async (req, res) => {
   return res.status(201).json(new ApiResponse(201, { post }, 'Request posted'));
 });
 
+// Narrowing by type is an allow-list, not a pass-through: `listingType` goes
+// straight into a Mongo filter, and `?listingType[$ne]=x` would otherwise be
+// a query somebody else wrote. express-mongo-sanitize strips `$` keys, but
+// not being able to name the values is the stronger guarantee.
+const LISTING_TYPES = ['sale', 'rent'];
+
 // GET /lookingfor
 const getAll = catchAsync(async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
-  const { category } = req.query;
+  const { category, listingType } = req.query;
+
+  // Posts written before `listingType` existed have no field to match, and a
+  // plain equality check would hide them from the "to buy" tab — which is
+  // what they are. `$ne: 'rent'` is the same question asked so that a
+  // missing field counts as a sale, the way the matcher reads it.
+  const byType =
+    listingType === 'sale'
+      ? { listingType: { $ne: 'rent' } }
+      : LISTING_TYPES.includes(listingType)
+        ? { listingType }
+        : {};
+
   // Suspended posters come off the board with everything else of theirs.
-  const filter = { status: 'open', ...(category && { category }), ...(await excludeBlocked('userId')) };
+  const filter = {
+    status: 'open',
+    ...(category && { category }),
+    ...byType,
+    ...(await excludeBlocked('userId')),
+  };
 
   const [posts, total] = await Promise.all([
     LookingFor.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).populate('userId', 'name avatar'),

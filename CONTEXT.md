@@ -6,7 +6,7 @@ A running handoff file. **Read this first when starting a new session**, then
 Keep it current: when a chunk of work lands, move it from "Next up" to "Done"
 and add anything a cold reader could not infer from the code.
 
-Last updated: 2026-11-22 (photos open full size; the wanted board asks to buy or to rent)
+Last updated: 2026-11-23 (the wanted board filters by intent, and the matcher reads the reference photo)
 
 ---
 
@@ -2217,17 +2217,118 @@ screen, because the risk here is a misread rather than arithmetic, and no
 unit test can tell you a stamp rendered. Renaming the stamp or dropping the
 prefix fails it; checked by doing both.
 
-### Still not done here
+---
 
-- **No buy/rent filter on the board itself.** A student with a cycle to hire
-  out cannot narrow to the people who want to rent. `getAll` would need one
-  query param and the filter row two more chips — the row already holds
-  "Everything" plus six categories, so it wants a thought about crowding
-  rather than another chip.
-- **The matchers still read only title and description.** A want now has a
-  photograph and nothing looks at it. That is the interesting version of
-  this feature and it needs an image embedding, which is a different model
-  and a different cost.
+## The board can be narrowed, and the photo is read (2026-11-23)
+
+The two things the previous section left open.
+
+### Buy or rent, on the board
+
+`?listingType=sale|rent` on `GET /lookingfor`, and two chips. An allow-list,
+not a pass-through, because the value goes straight into a Mongo filter.
+
+**`sale` is asked as `$ne: 'rent'`, not as equality.** The posts written
+before the field existed have no `listingType` to match, and they are
+purchases — a plain `{ listingType: 'sale' }` would hide every one of them
+from the tab they belong to. Same reading as `candidateQuery`'s
+`wanted.listingType || 'sale'`, for the same reason.
+
+What gave, on crowding: **two category chips.** The row holds "Everything",
+"To buy", "To rent" and four categories instead of six. The type split is
+the one that changes what the board is *for*; a category filter on a board
+of thirteen posts mostly returns nothing. "Everything" clears **both**
+filters — it is the show-me-the-whole-board reset, which is what it already
+meant, and a second "all" chip for the second axis would have been the
+ambiguous version of this.
+
+### The matcher reads the photograph
+
+A caption, not a second vector. **This is a deliberate departure from what
+the roadmap item said** ("needs an image embedding"), and the reason is the
+threshold: 0.66 in `semantic.matcher.js` was calibrated by measuring a real
+board, a multimodal space would need its own number measured the same way,
+and there is nothing to measure it on yet. Two uncalibrated thresholds is
+worse matching, not better. Google's multimodal embedding also lives on
+Vertex AI, which wants a GCP project rather than the plain API key
+everything else here uses, and the listings would have to be re-embedded
+into that space too — so the cost is the whole board, not the few posts with
+a photo.
+
+Captioning puts the picture into the space that already exists:
+
+1. The hourly job asks the generator what is in the lead photo
+   (`services/photoCaption.service.js`).
+2. The caption is stored on the post (`photoCaption`, `select: false`).
+3. `textOf` in the semantic matcher appends it, so it is part of the text the
+   post is embedded from.
+
+Step 3 is the whole trick: **the matcher knows nothing about photographs.**
+Adding a caption changes the hashed source text, so the existing staleness
+check marks the cached vector stale and the existing embedder re-embeds it.
+No new vector, no new space, no new threshold.
+
+**Measured on the real board, 2026-11-23.** A deliberately vague want —
+"need one of these / as in the photo" — with a photo of a bicycle, scored
+against the 16 live listings:
+
+| | words only | with the caption |
+|---|---|---|
+| Firefox single-speed cycle | 0.634 | **0.671** |
+| Hercules Roadeo 26in gear cycle | 0.634 | **0.666** |
+| Cycle lock with keys | 0.647 | 0.657 |
+| Cycling helmet, medium | 0.630 | 0.645 |
+| Mini fridge, 90 litres | 0.640 | 0.566 |
+| Casio fx-82MS calculator | 0.630 | 0.560 |
+| Cengel Thermodynamics | 0.601 | 0.534 |
+| **over the 0.66 bar** | **0** | **2** |
+
+Words alone put everything in a flat 0.59–0.65 band — "need one of these" is
+near-equidistant from the entire board, which is exactly the uselessness the
+feature exists for. The caption does not just lift the right answers over
+the bar; it **pushes the wrong ones down 7–8 points**. The band separates,
+which is why the existing threshold still holds.
+
+Gemini's actual caption for that photo: *"Bicycle with a front metal basket
+· bicycle · bike · basket · cycle · transport · ride"*. 7.3 seconds. Handed the
+Cloudinary stock photo of two people instead, it returned an **empty**
+caption — the "if it is not a thing that could be bought or borrowed, say
+nothing" rule, working on real input.
+
+### Three decisions worth keeping hold of
+
+- **The capability is asked about, never assumed.** `describeImage` is an
+  *optional* method on the generator seam and `canSeeImages()` reports
+  whether the active provider has it. A text-only provider handed an image
+  it could not read would answer from the prompt alone and return a
+  confident description of a photograph it never saw — and an embedded guess
+  is indistinguishable from an embedded fact. No caption beats that.
+- **The caption is never shown.** `select: false`. It is machine-written, it
+  is sometimes wrong, and a student would read it as the product putting
+  words in their mouth. It exists to be embedded.
+- **A photo with nothing in it is still recorded as read.** `isFresh` is
+  keyed on the image URL and the model, deliberately *not* "and it has text
+  in it" — otherwise one blurry photo costs a model call every hour until
+  the post expires.
+
+And the SSRF note: `photoCaption` fetches a URL out of the database, which
+is a request the server makes on somebody else's say-so, from inside
+wherever it is deployed. The host is an **allow-list** (`*.cloudinary.com`,
+https only), not a sanity check. `images` can only be written by multer
+today, so in practice the URLs are always ours; the allow-list is for the
+day that stops being true.
+
+### Still open here
+
+- **Listings are not captioned, only wants.** The want is the
+  under-specified side — a seller writes a title and a description because
+  they know what they have. Captioning the board as well would help and
+  costs one model call per listing; worth it once there are photographed
+  wants to measure against.
+- **The e2e suite could not be run for this chunk.** `C:` filled to zero
+  bytes and the vite dev server cannot start. The server suite (373) and the
+  client build are green; `tests/e2e/wanted-board.test.mjs` gained a filter
+  test that has never been executed.
 
 ## Next up
 
