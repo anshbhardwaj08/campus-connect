@@ -6,7 +6,7 @@ A running handoff file. **Read this first when starting a new session**, then
 Keep it current: when a chunk of work lands, move it from "Next up" to "Done"
 and add anything a cold reader could not infer from the code.
 
-Last updated: 2026-09-22 (the wanted board matches listings; email verification is enforced)
+Last updated: 2026-11-22 (photos open full size; the wanted board asks to buy or to rent)
 
 ---
 
@@ -2023,9 +2023,10 @@ The row says "under ₹X", so price **filters**, it does not rank — and the
 fallback applies it too, because the heading is the same either way. A free
 listing keeps the plain "More like this": "under Free" is nonsense.
 
-`listingType` filters for a reason that is the same bug as roadmap item 3:
-₹120/day is not "cheaper than" a ₹2,100 bike, it is a different kind of
-number. A hire is never offered as a substitute for a sale, or the reverse.
+`listingType` filters for the same reason the wanted board grew the field
+(see "The wanted board asks two questions now", below): ₹120/day is not
+"cheaper than" a ₹2,100 bike, it is a different kind of number. A hire is
+never offered as a substitute for a sale, or the reverse.
 
 Four items, like the strip above it — a row, not a wall. It also means the
 marginal matches at the bottom of the ranking mostly never get a slot: they
@@ -2120,9 +2121,6 @@ discrimination.
 
 ### Known limits
 
-- **The wanted board has no photos to open.** `LookingFor` has no image
-  field at all — not on the model, the API or the form — so there is nothing
-  there to pop up or crop. See roadmap item 9.
 - **EXIF orientation is not corrected.** A photo straight off a phone that
   relies on an orientation flag can crop rotated, because `drawImage` reads
   raw pixels while `<img>` honours the flag. Not hit in testing on desktop
@@ -2130,6 +2128,106 @@ discrimination.
 - Covered by `tests/e2e/photo-lightbox.test.mjs` (4 tests). The existing
   `navigation`, `smoke`, `goes-with` and `community` e2e tests all still
   pass, which is what clears the card refactor.
+
+---
+
+## The wanted board asks two questions now (2026-11-22)
+
+Two things that turned out to be one change, because both are the same four
+files.
+
+### A want says whether it wants to buy or to borrow
+
+`LookingFor` had no `listingType`, so the board could only ever ask one of
+the two questions — and the one it asked was the wrong one for some of the
+posts on it. A live post read **"cycle", ₹100, "for one hour"**: somebody
+wanting to rent. It was scored against ₹4,200 sale prices, matched nothing,
+and nothing in a log said why. Correct by the rules in force, and useless in
+fact.
+
+No matcher could fix that, which is the part worth keeping hold of: buying
+and renting are not degrees of the same question, they are different
+questions about different listings. So it is a **filter** in
+`matchers/candidates.js` — the one place both matchers share — and not a
+ranking signal.
+
+**The budget was the second half of the same bug.** A rent listing's `price`
+is a *rate* per `rentPeriod`, so `price <= maxBudget` was comparing two
+different units: ₹150 a day against ₹900 a week said "too expensive" about
+something that works out cheaper. The want now carries a `rentPeriod` too,
+the budget is converted to a daily rate, and every period is compared in
+those terms.
+
+A rental want that never said *per what* keeps the type filter and **drops**
+the budget one. A guessed unit is wrong by a factor of thirty, and
+over-showing beats silently hiding everything affordable.
+
+`listingType` is defaulted to `'sale'` rather than required — almost every
+want is a purchase, and the posts written before the field existed have to
+mean something. Two consequences to know:
+
+- `candidateQuery` reads `wanted.listingType || 'sale'`, because a document
+  fetched with `.lean()` skips Mongoose defaults.
+- The default is applied in the **validator** as well as on the model, so a
+  post that came through the API always carries the field explicitly.
+- `scripts/backfill-wanted-type.js` (`npm run wanted:retype`) re-reads the
+  old posts for rental wording — rent, borrow, hire, "for one hour", "per
+  day". Dry run by default; it only ever moves a post *to* `rent`, never
+  back. On the live board it reads 13 posts and finds exactly the one from
+  the paragraph above.
+
+### A want can carry a reference photo
+
+Not a record of an object somebody owns — a photo of **the kind of thing**:
+"a cycle like this one", "this edition of the textbook". Three photos, not
+six, and the same `ImagePicker` (so the same cropper) the listing form uses.
+`images` is deliberately **absent from the validator**: the only way a photo
+reaches a want is multer having actually uploaded one, so a client cannot
+name a URL and put any image on the board under its own name.
+
+`upload.array()` passes a non-multipart request straight through, which is
+what keeps the JSON caller working — the "nobody is selling the thing that
+goes with this" button on a listing page posts here with no files at all.
+That is covered by a test, because it is the kind of caller nobody thinks
+about when adding an upload handler.
+
+### The card had to be rewritten, and the stamp is not decoration
+
+`components/community/WantedCard.jsx`, lifted out of the page the way
+`EventCard` and `LostFoundCard` were.
+
+**A want showing a photo of the thing somebody wants looks exactly like a
+listing of the thing they have**, and the two invite opposite actions. Three
+things stop that misread:
+
+- **WANTED**, stamped top-left on every card, the way Lost & Found says LOST
+  or FOUND. Ink, not crimson: a standing request is not urgent.
+- **To rent** top-right when it is a hire — the same corner a listing puts
+  "For rent" in, so the two boards read the same way round.
+- **"up to"** in front of the budget. A number stamped into that corner is
+  an asking price everywhere else in the product. `PriceSlab` grew a
+  `prefix` prop and `.slab__prefix` for it, rather than the page hand-rolling
+  a slab.
+
+No budget stated means **no slab at all** — `PriceSlab` stamps "FREE" on an
+empty price, which on a want would read as an offer.
+
+`tests/e2e/wanted-board.test.mjs` asserts those three bits of text are on
+screen, because the risk here is a misread rather than arithmetic, and no
+unit test can tell you a stamp rendered. Renaming the stamp or dropping the
+prefix fails it; checked by doing both.
+
+### Still not done here
+
+- **No buy/rent filter on the board itself.** A student with a cycle to hire
+  out cannot narrow to the people who want to rent. `getAll` would need one
+  query param and the filter row two more chips — the row already holds
+  "Everything" plus six categories, so it wants a thought about crowding
+  rather than another chip.
+- **The matchers still read only title and description.** A want now has a
+  photograph and nothing looks at it. That is the interesting version of
+  this feature and it needs an image embedding, which is a different model
+  and a different cost.
 
 ## Next up
 

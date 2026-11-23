@@ -16,6 +16,7 @@ const {
   createEventSchema,
   createLostFoundSchema,
   createCarpoolSchema,
+  createLookingForSchema,
 } = require('../../src/validators/community.validator');
 
 // Mirrors middleware/validate.js — stripUnknown is half the protection, so
@@ -201,6 +202,60 @@ describe('community validators', () => {
 
   test('a lost-and-found post must be lost or found, not something else', () => {
     assert.equal(check(createLostFoundSchema, { type: 'stolen', title: 'A bike' }).ok, false);
+  });
+
+  // The wanted board learned to ask for a hire as well as a purchase, and
+  // `matchers/candidates.js` reads `listingType` off documents fetched with
+  // .lean() — where Mongoose defaults do not apply. So the default has to be
+  // applied HERE, on the way in, not only on the model.
+  test('a want is for sale unless it says otherwise', () => {
+    const { ok, value } = check(createLookingForSchema, { title: 'need a cycle' });
+
+    assert.ok(ok);
+    assert.equal(value.listingType, 'sale');
+  });
+
+  test('a want can ask to rent, and say per what', () => {
+    const { ok, value } = check(createLookingForSchema, {
+      title: 'need a cycle',
+      listingType: 'rent',
+      rentPeriod: 'day',
+      maxBudget: 100,
+    });
+
+    assert.ok(ok);
+    assert.deepEqual(
+      { listingType: value.listingType, rentPeriod: value.rentPeriod },
+      { listingType: 'rent', rentPeriod: 'day' }
+    );
+  });
+
+  // Stripped rather than rejected: switching the form back to "buy" with the
+  // period control still mounted is a slip, not an attack, and a 400 for it
+  // would be a dead end the student cannot see the cause of.
+  test('a period on a want to buy is dropped, not refused', () => {
+    const { ok, value } = check(createLookingForSchema, {
+      title: 'need a cycle',
+      rentPeriod: 'month',
+    });
+
+    assert.ok(ok);
+    assert.equal(value.rentPeriod, undefined);
+  });
+
+  test('a want cannot invent a third kind of listing, or its own photos', () => {
+    assert.equal(
+      check(createLookingForSchema, { title: 'need a cycle', listingType: 'barter' }).ok,
+      false
+    );
+
+    // Photos only exist because multer uploaded them. A client handing over
+    // a URL would otherwise put any image on the board under its own name.
+    const { value } = check(createLookingForSchema, {
+      title: 'need a cycle',
+      images: ['https://example.com/not-mine.jpg'],
+    });
+    assert.equal(value.images, undefined);
   });
 
   test('a carpool needs contact details and a believable seat count', () => {

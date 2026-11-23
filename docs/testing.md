@@ -53,12 +53,12 @@ is why there is no supertest and nothing is mocked.
 
 ## What it covers
 
-339 tests.
+353 tests.
 
 | File | | What it is for |
 |---|---|---|
 | `unit/scamScore` | 8 | the thresholds that send a listing to a moderator |
-| `unit/validators` | 19 | the allow-lists — mostly what they *refuse* |
+| `unit/validators` | 23 | the allow-lists — mostly what they *refuse* |
 | `unit/chatMessage` | 10 | what a message and an offer may be; the only copy of those rules |
 | `unit/emailTransport` | 5 | that mail is handed to a transport, not silently dropped |
 | `unit/vocabulary` | 15 | what a piece of text is about — the synonym list the wanted board runs on |
@@ -71,7 +71,7 @@ is why there is no supertest and nothing is mocked.
 | `api/retrieval` | 8 | retrieval on browse search and saved-search alerts, and when it may run |
 | `api/similar` | 12 | "more like this, under ₹X" — ranking, the price rule, the fallback |
 | `api/semanticMatcher` | 15 | the matcher's machinery: caching, batching, staleness, fallback |
-| `api/wantedMatch` | 18 | which listings answer a wanted post, and what the student is told |
+| `api/wantedMatch` | 27 | which listings answer a wanted post — buying is not renting — and what the student is told |
 | `api/crossSell` | 22 | "goes with this" — what the app does with whatever a model returns |
 | `api/deals` | 22 | the handshake, its guards, and reviews |
 | `api/rental` | 24 | the hire clock end to end, including the daily job |

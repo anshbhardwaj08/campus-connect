@@ -11,7 +11,8 @@ const { test, describe, before, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 
 const { startDb, stopDb, clearDb } = require('../helpers/db');
-const { makeUser, makeListing } = require('../helpers/factory');
+const { startApi, stopApi } = require('../helpers/api');
+const { makeUser, makeListing, makeRental, makeSignedInUser } = require('../helpers/factory');
 const { findMatches, activeName } = require('../../src/matchers');
 const { runWantedMatches } = require('../../src/services/wantedMatch.service');
 const LookingFor = require('../../src/models/LookingFor');
@@ -19,10 +20,12 @@ const Notification = require('../../src/models/Notification');
 
 before(async () => {
   await startDb();
+  await startApi();
 });
 
 const { after } = require('node:test');
 after(async () => {
+  await stopApi();
   await stopDb();
 });
 
@@ -161,6 +164,183 @@ describe('which listings answer a wanted post', () => {
     const wanted = await makeWanted(student._id, { title: 'need a cycle' });
 
     assert.equal((await findMatches(wanted, { limit: 2 })).length, 2);
+  });
+});
+
+// Buying and renting are different questions about different listings, and
+// before `LookingFor.listingType` existed the board could only ask one of
+// them. A live post read "cycle", ₹100, "for one hour" — somebody wanting to
+// borrow — and it was scored against ₹4,200 sale prices. Every test here
+// would have passed before the field was added, which is the point of them.
+describe('buying is not renting', () => {
+  let student;
+  let seller;
+
+  beforeEach(async () => {
+    await clearDb();
+    student = await makeUser();
+    seller = await makeUser();
+  });
+
+  test('a want to rent is not answered by the same thing for sale', async () => {
+    await makeListing(seller._id, { title: 'Hercules gear cycle', price: 4200, status: 'active' });
+    const wanted = await makeWanted(student._id, {
+      title: 'need a cycle',
+      listingType: 'rent',
+      rentPeriod: 'day',
+      maxBudget: 100,
+    });
+
+    assert.equal((await findMatches(wanted)).length, 0);
+  });
+
+  test('and a want to buy is not answered by a hire', async () => {
+    await makeRental(seller._id, { title: 'Hercules gear cycle', price: 80, status: 'active' });
+    const wanted = await makeWanted(student._id, { title: 'need a cycle', maxBudget: 5000 });
+
+    assert.equal((await findMatches(wanted)).length, 0);
+  });
+
+  test('a want to rent finds the hire', async () => {
+    const hire = await makeRental(seller._id, {
+      title: 'Hercules gear cycle',
+      price: 80,
+      rentPeriod: 'day',
+      status: 'active',
+    });
+    const wanted = await makeWanted(student._id, {
+      title: 'need a cycle',
+      listingType: 'rent',
+      rentPeriod: 'day',
+      maxBudget: 100,
+    });
+
+    const matches = await findMatches(wanted);
+    assert.equal(matches.length, 1);
+    assert.equal(String(matches[0].listing._id), String(hire._id));
+  });
+
+  // The second half of the same bug. A rent listing's price is a rate, so
+  // `price <= maxBudget` compares two different units — ₹150 a day against
+  // ₹900 a week says "too expensive" about something that is cheaper.
+  test('a daily budget is compared against a weekly rate properly', async () => {
+    const cheaper = await makeRental(seller._id, {
+      title: 'Avon cycle to hire',
+      rentPeriod: 'week',
+      price: 900, // ₹128 a day
+      status: 'active',
+    });
+    await makeRental(seller._id, {
+      title: 'Firefox cycle to hire',
+      rentPeriod: 'week',
+      price: 1400, // ₹200 a day
+      status: 'active',
+    });
+    const wanted = await makeWanted(student._id, {
+      title: 'need a cycle',
+      listingType: 'rent',
+      rentPeriod: 'day',
+      maxBudget: 150,
+    });
+
+    const matches = await findMatches(wanted);
+    assert.equal(matches.length, 1, 'the weekly rate that works out cheaper per day');
+    assert.equal(String(matches[0].listing._id), String(cheaper._id));
+  });
+
+  test('a rental want that never said per what still filters by type', async () => {
+    const hire = await makeRental(seller._id, {
+      title: 'Hercules gear cycle',
+      price: 2500,
+      rentPeriod: 'month',
+      status: 'active',
+    });
+    await makeListing(seller._id, { title: 'Avon cycle', price: 50, status: 'active' });
+
+    // ₹100 with no period. Its unit is unknown and a wrong guess is out by a
+    // factor of thirty, so the budget is dropped rather than applied — but a
+    // sale at ₹50 is still the wrong question and stays out.
+    const wanted = await makeWanted(student._id, {
+      title: 'need a cycle',
+      listingType: 'rent',
+      maxBudget: 100,
+    });
+
+    const matches = await findMatches(wanted);
+    assert.equal(matches.length, 1);
+    assert.equal(String(matches[0].listing._id), String(hire._id));
+  });
+
+  // Posts written before the field existed, and anything read with .lean()
+  // (where Mongoose skips defaults), must behave exactly as they did.
+  test('a post with no type at all is read as wanting to buy', async () => {
+    const forSale = await makeListing(seller._id, {
+      title: 'Hercules gear cycle',
+      status: 'active',
+    });
+    await makeRental(seller._id, { title: 'Avon cycle to hire', status: 'active' });
+
+    const wanted = await makeWanted(student._id, { title: 'need a cycle' });
+    await LookingFor.updateOne({ _id: wanted._id }, { $unset: { listingType: '' } });
+    const old = await LookingFor.findById(wanted._id).lean();
+    assert.equal(old.listingType, undefined, 'the field really is absent');
+
+    const matches = await findMatches(old);
+    assert.equal(matches.length, 1);
+    assert.equal(String(matches[0].listing._id), String(forSale._id));
+  });
+});
+
+// The route grew `upload.array('images', 3)` so a want can carry a reference
+// photo, and multer sits in front of the validator. That is the kind of
+// change that breaks a caller nobody was thinking about — the "nobody is
+// selling the thing that goes with this" button on a listing page posts here
+// as plain JSON, with no files at all.
+//
+// A multipart request is deliberately NOT covered: multer's storage engine
+// is Cloudinary, so a real upload would leave this process and hit the
+// network. What is testable here is that adding it did not break anything.
+describe('posting a want over HTTP', () => {
+  let api;
+
+  beforeEach(async () => {
+    await clearDb();
+    ({ api } = await makeSignedInUser());
+  });
+
+  test('a JSON post still works with an upload handler in front of it', async () => {
+    const res = await api.post('/lookingfor', {
+      title: 'need a drafter',
+      description: 'To go with Engineering Drawing, first year.',
+      category: 'stationery',
+    });
+
+    assert.equal(res.status, 201, res.body?.message);
+    assert.equal(res.body.data.post.listingType, 'sale');
+    assert.deepEqual(res.body.data.post.images, []);
+  });
+
+  test('and a rental want keeps its period', async () => {
+    const res = await api.post('/lookingfor', {
+      title: 'need a cycle',
+      listingType: 'rent',
+      rentPeriod: 'day',
+      maxBudget: 100,
+    });
+
+    assert.equal(res.status, 201, res.body?.message);
+    assert.equal(res.body.data.post.rentPeriod, 'day');
+  });
+
+  // The only way a photo gets onto a want is multer having uploaded one.
+  test('a client cannot name its own photos', async () => {
+    const res = await api.post('/lookingfor', {
+      title: 'need a cycle',
+      images: ['https://example.com/not-mine.jpg'],
+    });
+
+    assert.equal(res.status, 201, res.body?.message);
+    assert.deepEqual(res.body.data.post.images, []);
   });
 });
 

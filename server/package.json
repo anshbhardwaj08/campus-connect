@@ -17,6 +17,7 @@
     "match:run": "node scripts/match-run.js",
     "crosssell:run": "node scripts/crosssell-run.js",
     "similar:run": "node scripts/similar-run.js",
+    "wanted:retype": "node scripts/backfill-wanted-type.js",
     "seed:demo": "node scripts/seed-demo-listings.js"
   },
   "dependencies": {

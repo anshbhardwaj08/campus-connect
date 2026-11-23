@@ -295,6 +295,19 @@
     background: var(--crimson);
   }
 
+  /* A budget is not an asking price. The wanted board stamps the same slab,
+     so its number needs one word in front of it — on a card that also has a
+     photograph, a bare "₹600" reads as what the thing costs. Work Sans and
+     tiny, the same move as .slab__was: the number still carries the slab. */
+  .slab__prefix {
+    font-family: "Work Sans", system-ui, sans-serif;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.72;
+  }
+
   .slab__was {
     font-family: "Work Sans", system-ui, sans-serif;
     font-size: 10px;

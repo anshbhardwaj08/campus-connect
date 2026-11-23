@@ -102,15 +102,7 @@ unreachable by that path.
 Fix the arithmetic, pass a real category average, and add a test that proves
 a listing can actually reach the queue.
 
-### 3. A rental request is scored against sale prices · **S** · *bug*
-
-A live wanted post reads `cycle`, `maxBudget: 100`, description *"for one
-hour"* — somebody wanting to **rent**. It matches nothing, correctly by the
-current rules and uselessly in fact: `LookingFor` has no `listingType`, so an
-hourly budget is compared against a ₹4,200 sale price. No matcher can fix
-this; the model needs the field.
-
-### 4. Delete `services/ai.service.js` · **S**
+### 3. Delete `services/ai.service.js` · **S**
 
 `suggestPrice` and `getScamScore` were written and never imported by
 anything, and are now superseded: generation lives in `src/generators/`, on
@@ -121,7 +113,7 @@ code. Drop the `openai` dependency with it — nothing else uses it.
 
 ## Later
 
-### 5. Make it installable (PWA) · **M**
+### 4. Make it installable (PWA) · **M**
 
 `CLAUDE.md` calls the client a PWA. There is no manifest and no service
 worker — it is not one. Adding them buys "Add to Home Screen": real icon,
@@ -129,36 +121,38 @@ fullscreen, no browser chrome.
 
 **Do this before Capacitor.** Most of the benefit, none of the auth problem.
 
-### 6. Fix the cold start · **S** · *blocks 5 and 7*
+### 5. Fix the cold start · **S** · *blocks 4 and 6*
 
 Render's free tier spins the server down after inactivity, so a cold open
 takes the better part of a minute. An app icon that hangs for fifty seconds
 is uninstalled once and never opened again. An uptime ping or the paid tier.
 
-### 7. Capacitor · **L**
+### 6. Capacitor · **L**
 
 The packaging is the easy part. The real work: in a Capacitor WebView the
 origin is `capacitor://localhost`, so the httpOnly `sameSite: lax` cookies
 are not sent to the Render domain and **every request returns 401**. Needs a
 token auth path alongside the cookie one.
 
-### 8. Photos on the wanted board · **M**
+### 7. A buy / rent filter on the wanted board · **S**
 
-Browse, Events and Lost & Found all open a photo full size now, and all
-three upload forms can crop. **The wanted board cannot do either, because
-`LookingFor` has no image field** — not on the model, not in the API, not on
-the form. There is nothing to show.
+The board asks two questions now and offers no way to see one of them. A
+student with a cycle to hire out cannot narrow to the people who want to
+rent — which is most of the reason to read that board at all.
 
-It is not a viewer change, it is a feature: a reference photo is genuinely
-useful on a wanted post ("a cycle like this one", "this edition of the
-textbook"), and it would feed the matchers, which currently read only title
-and description. Model field → multer route → `ImagePicker` on the form
-(which already does crop) → `PhotoExpand` on the card. The viewer and the
-cropper are already built and shared, so this is mostly plumbing.
+`getAll` needs one query param; the filter row needs two chips. The row
+already holds "Everything" plus six categories, so the work is deciding what
+gives, not writing it.
 
-Worth deciding rather than assuming: a wanted post with a photo of the thing
-somebody *wants* can be mistaken for a listing of the thing they *have*. The
-card would need to say which it is, the way Lost & Found says LOST or FOUND.
+### 8. Let the matchers look at the photo · **L**
+
+A want carries a reference photo now and nothing reads it: both matchers see
+title and description only. "This edition of the textbook" is a sentence a
+photograph answers much better than words do.
+
+Needs an image embedding — a different model, a different cost, and a second
+vector per document. Worth it only once there are enough photos on the board
+to tell whether it helps.
 
 ### 9. Housekeeping
 
@@ -176,6 +170,11 @@ card would need to say which it is, the way Lost & Found says LOST or FOUND.
 - [ ] Unused import warning in `client/src/services/api.js`.
 - [ ] Re-seed the board for demos, then remove it before any real launch —
       see item 1. `npm run seed:demo -- --for <email> --remove --commit`
+- [ ] **Run the wanted-board backfill on the live data.**
+      `npm run wanted:retype` (dry run, read-only) reads 13 posts and finds
+      one that was asking to rent and being scored against sale prices —
+      "cycle", ₹100, *"for one hour"*. Add `-- --commit` to apply, then
+      `npm run match:run` to let the matcher have another go at it.
 
 ---
 

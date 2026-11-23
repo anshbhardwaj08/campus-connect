@@ -18,8 +18,7 @@ verified against the live API.
   box is the only one at desktop width and submits the same way
 - **Photos** — any photograph on a card or a listing page opens full size
   (`ui/Lightbox`, arrow keys, a counter), and every upload form can crop to
-  4:3 before sending (`listing/CropModal`). Cards zoom under the cursor. The
-  wanted board is the exception — `LookingFor` carries no image at all
+  4:3 before sending (`listing/CropModal`). Cards zoom under the cursor
 - **Listings** — detail page, post, edit. Photos via Cloudinary. The detail
   page carries two rows that answer opposite questions: "Goes with this"
   (complements, written by the hourly job) and "More like this, under ₹X"
@@ -50,6 +49,13 @@ verified against the live API.
 - **Saved** — saved listings
 - **Community** — Events (poster, organiser can call off), Lost & Found
   (photos, resolve), Carpool (post/remove), Wanted (post/fulfil)
+- **The wanted board** — a want says whether it wants to **buy or to rent**,
+  and a rental want says what its budget is *per*; the matcher filters on
+  both, because a hire is a different question and not a cheaper answer. Up
+  to three reference photos ("a cycle like this one"), cropped by the same
+  picker the sell form uses. Every card is stamped WANTED and its budget
+  reads "up to ₹600" — a want with a photo on it would otherwise look like
+  a listing, which invites the opposite action
 - **Report** — `report/ReportButton` on a listing (seller panel) and on a
   public profile. Fixed reason list + optional detail; hidden when signed
   out or on your own listing. Idempotent: reporting twice while the first

@@ -114,7 +114,14 @@ ground when the item is free. Scales in on the x-axis after the panel wipe.
 
 ```jsx
 <PriceSlab price={2100} was={5500} />
+<PriceSlab price={100} period="day" prefix="up to" />
 ```
+
+`prefix` is one word in front of the number, in Work Sans at 9px
+(`.slab__prefix`), for a slab that is **not** stating a price. The wanted
+board passes `"up to"`: a budget stamped the way a price is stamped reads as
+an asking price, on a card that is already at risk of being taken for a
+listing. Do not render a slab with no price to put in it — it stamps FREE.
 
 ### `Button`
 `Bangers`, crimson fill, 3px ink border, `box-shadow: 4px 4px 0 ink`. On
@@ -170,7 +177,8 @@ art well — the one corner free on every card in the product (listings carry
 the condition badge top-left, "For rent" top-right, the price slab
 bottom-right; events carry the category top-left and a slab bottom-right;
 lost-and-found carries Lost/Found top-left and "Back with its owner"
-top-right).
+top-right; wants carry WANTED top-left, "To rent" top-right and the budget
+slab bottom-right).
 
 Always visible, never revealed on hover: `:hover` sticks after a tap on a
 touch screen, so a reveal would either never happen or never undo. Only

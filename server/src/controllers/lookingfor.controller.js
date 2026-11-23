@@ -7,7 +7,11 @@ const { excludeBlocked } = require('../utils/blockedUsers');
 
 // POST /lookingfor
 const create = catchAsync(async (req, res) => {
-  const post = await LookingFor.create({ ...req.body, userId: req.user._id });
+  // Cloudinary URLs, not the client's word for them — `images` is deliberately
+  // absent from the validator, so the only way a photo gets onto a want is
+  // through multer having actually uploaded one.
+  const images = (req.files || []).map((file) => file.path);
+  const post = await LookingFor.create({ ...req.body, images, userId: req.user._id });
   return res.status(201).json(new ApiResponse(201, { post }, 'Request posted'));
 });
 
